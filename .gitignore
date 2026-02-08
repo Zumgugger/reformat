@@ -1,0 +1,15 @@
+.venv/
+
+# Node/Electron (added now so we don't forget later)
+node_modules/
+dist/
+out/
+release/
+build/
+
+# Logs
+*.log
+
+# OS/editor
+.DS_Store
+Thumbs.db

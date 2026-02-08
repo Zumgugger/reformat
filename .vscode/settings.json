@@ -1,0 +1,15 @@
+{
+  "python.terminal.activateEnvironment": true,
+  "terminal.integrated.profiles.windows": {
+    "WSL (reformat .venv)": {
+      "path": "C:\\Windows\\System32\\wsl.exe",
+      "args": [
+        "-e",
+        "bash",
+        "-lc",
+        "cd \"$(wslpath -a '${workspaceFolder}')\" && source .venv/bin/activate && exec bash -l"
+      ]
+    }
+  },
+  "terminal.integrated.defaultProfile.windows": "WSL (reformat .venv)"
+}
