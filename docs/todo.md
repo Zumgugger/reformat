@@ -41,7 +41,12 @@ Goal: project boots, tests run, and a minimal window appears.
 - [x] `npm test` passes
 
 ### Complete recurring tasks
-- [x] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (3/3 passing)
+- [x] Update README.md
+- [x] Commit to git (commit 3bb725a)
+- [x] Configure git remote for SSH
+- [ ] Push to GitHub (requires SSH key setup - see note below)
 
 ### Phase A Notes (2026-02-09)
 - Installed Node.js v24.13.0 LTS via nvm in WSL
@@ -57,6 +62,34 @@ Goal: project boots, tests run, and a minimal window appears.
 - IPC bridge established with ping/pong test handler
 - Matrix theme CSS implemented with green-on-black aesthetic
 - README.md created with setup instructions
+- Git commit completed (3bb725a)
+- Git remote configured for SSH (git@github.com:Zumgugger/reformat.git)
+- **TO COMPLETE:** Git push requires SSH key setup in WSL:
+  
+  **Option 1 - Copy existing SSH key from Windows to WSL:**
+  ```bash
+  # If you have SSH keys in Windows, copy them to WSL:
+  cp /mnt/c/Users/marku/.ssh/id_* ~/.ssh/
+  chmod 600 ~/.ssh/id_*
+  chmod 644 ~/.ssh/id_*.pub
+  
+  # Then push:
+  cd /mnt/e/Programmierenab24/reformat
+  git push origin main
+  ```
+  
+  **Option 2 - Generate new SSH key in WSL:**
+  ```bash
+  ssh-keygen -t ed25519 -C "your_email@example.com"
+  cat ~/.ssh/id_ed25519.pub  # Add this to GitHub Settings > SSH Keys
+  
+  # Then push:
+  cd /mnt/e/Programmierenab24/reformat
+  git push origin main
+  ```
+  
+  **Option 3 - Use Windows Git instead:**
+  Open PowerShell/CMD in Windows and push from there if SSH is configured in Windows.
 
 ---
 

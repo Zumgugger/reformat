@@ -14,6 +14,13 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 
 - Node.js v18 or higher (LTS recommended)
 - npm v9 or higher
+- Git configured with GitHub authentication
+
+**WSL Users:** Node.js was installed via nvm. Use the included `run-wsl.sh` helper:
+```bash
+./run-wsl.sh npm test
+./run-wsl.sh npm run build
+```
 
 ### Installation
 
@@ -62,6 +69,30 @@ docs/
 - Windows (primary development target)
 - macOS (planned)
 - Linux (planned)
+
+## Git Workflow
+
+This project uses conventional commit messages and phase-based development. The repository is configured for SSH authentication.
+
+```bash
+# Run tests
+npm test
+
+# Build the project
+npm run build
+
+# Commit changes
+git add -A
+git commit -m "descriptive message"
+
+# Push to GitHub (requires SSH key)
+git push origin main
+```
+
+**SSH Setup:**
+- Remote URL: `git@github.com:Zumgugger/reformat.git`
+- Requires SSH key configured in your environment
+- For WSL users: ensure your SSH key is copied to `~/.ssh/` with proper permissions (600 for private key)
 
 ## Known Limitations
 
