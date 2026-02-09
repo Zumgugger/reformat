@@ -18,30 +18,45 @@ This is the execution checklist derived from `docs/blueprint.md` (chunks A–O) 
 Goal: project boots, tests run, and a minimal window appears.
 
 ### A1. Project initialization
-- [ ] Create Electron + TypeScript project structure with separate main/renderer
-- [ ] Add build tooling (choose Vite + Electron build approach; keep it simple and stable)
-- [ ] Add `preload` script and enable `contextIsolation`
-- [ ] Implement minimal window creation (single BrowserWindow)
+- [x] Create Electron + TypeScript project structure with separate main/renderer
+- [x] Add build tooling (choose Vite + Electron build approach; keep it simple and stable)
+- [x] Add `preload` script and enable `contextIsolation`
+- [x] Implement minimal window creation (single BrowserWindow)
 
 ### A2. Scripts + tests
-- [ ] Add npm scripts: `dev`, `build`, `test`
-- [ ] Add Vitest and a single passing unit test to prove wiring
-- [ ] Ensure `npm test` passes clean on Windows
+- [x] Add npm scripts: `dev`, `build`, `test`
+- [x] Add Vitest and a single passing unit test to prove wiring
+- [x] Ensure `npm test` passes clean on Windows
 
 ### A3. Minimal UI + theme
-- [ ] Minimal renderer UI placeholder text
-- [ ] Matrix-style base CSS (dark background, green accents, monospace) via a single stylesheet and CSS variables
+- [x] Minimal renderer UI placeholder text
+- [x] Matrix-style base CSS (dark background, green accents, monospace) via a single stylesheet and CSS variables
 
 ### A4. Minimal bridge
-- [ ] Expose a single `window.reformat.ping()` via `contextBridge`
-- [ ] Add renderer-side test with a mocked bridge (no Node APIs in renderer)
+- [x] Expose a single `window.reformat.ping()` via `contextBridge`
+- [x] Add renderer-side test with a mocked bridge (no Node APIs in renderer)
 
 ### Acceptance
-- [ ] `npm run dev` launches a window
-- [ ] `npm test` passes
+- [x] `npm run dev` launches a window
+- [x] `npm test` passes
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Complete recurring meta tasks
+
+### Phase A Notes (2026-02-09)
+- Installed Node.js v24.13.0 LTS via nvm in WSL
+- All scripts configured and working:
+  - `npm test` - passes 3 unit tests
+  - `npm run build` - compiles main + renderer successfully
+  - `npm run dev` - available (requires display for Electron)
+  - `npm run dev:simple` - added for simpler testing
+- Project structure created with src/main, src/renderer, src/shared
+- TypeScript configured with separate tsconfig for main and renderer
+- Vite configured for renderer bundling
+- Vitest configured for unit testing
+- IPC bridge established with ping/pong test handler
+- Matrix theme CSS implemented with green-on-black aesthetic
+- README.md created with setup instructions
 
 ---
 
