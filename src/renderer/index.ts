@@ -112,7 +112,6 @@ const cropApplyBtn = document.getElementById('crop-apply-btn') as HTMLButtonElem
 const cropCancelBtn = document.getElementById('crop-cancel-btn') as HTMLButtonElement;
 
 // Lens (100% detail) DOM Elements
-const lensEnabledCheckbox = document.getElementById('lens-enabled') as HTMLInputElement;
 const lensOverlay = document.getElementById('lens-overlay') as HTMLDivElement;
 const lensRect = document.getElementById('lens-rect') as HTMLDivElement;
 const detailPanelContainer = document.getElementById('detail-panel-container') as HTMLDivElement;
@@ -167,7 +166,7 @@ let cropQueueCompletedIds: Set<string> = new Set();
 let cropQueueCanceled = false;
 
 // Lens (100% detail preview) state
-let isLensEnabled = false;
+let isLensEnabled = true;
 let currentLensPosition: LensPosition | null = null;
 let isLensDragging = false;
 let lensDragStartX = 0;
@@ -543,15 +542,31 @@ function updateCropOverlay(): void {
   }
 
   if (!crop.active) {
+    if (lensOverlay) {
+      lensOverlay.classList.remove('crop-active');
+    }
     hideCropOverlay();
     return;
+  }
+
+  if (lensOverlay) {
+    lensOverlay.classList.add('crop-active');
   }
 
   showCropOverlay();
 
   // Get the actual displayed image dimensions
   const imageRect = previewImage.getBoundingClientRect();
+  const wrapperRect = previewWrapper.getBoundingClientRect();
   previewImageRect = imageRect;
+
+  // Align crop overlay to the image bounds inside the centered wrapper
+  const offsetX = imageRect.left - wrapperRect.left;
+  const offsetY = imageRect.top - wrapperRect.top;
+  cropOverlay.style.left = `${offsetX}px`;
+  cropOverlay.style.top = `${offsetY}px`;
+  cropOverlay.style.width = `${imageRect.width}px`;
+  cropOverlay.style.height = `${imageRect.height}px`;
   
   // Calculate crop selection position in pixels
   const rect = crop.rect;
@@ -861,6 +876,10 @@ function updateLensOverlay(): void {
   const imageRect = previewImage.getBoundingClientRect();
   if (!imageRect || imageRect.width === 0) return;
 
+  const overlayRect = lensOverlay.getBoundingClientRect();
+  const offsetX = imageRect.left - overlayRect.left;
+  const offsetY = imageRect.top - overlayRect.top;
+
   // Convert normalized lens position to screen coordinates
   const screen = normalizedToScreenLens(
     currentLensPosition,
@@ -869,8 +888,8 @@ function updateLensOverlay(): void {
   );
 
   // Position the lens rect
-  lensRect.style.left = `${screen.x}px`;
-  lensRect.style.top = `${screen.y}px`;
+  lensRect.style.left = `${screen.x + offsetX}px`;
+  lensRect.style.top = `${screen.y + offsetY}px`;
   lensRect.style.width = `${screen.width}px`;
   lensRect.style.height = `${screen.height}px`;
 
@@ -975,7 +994,7 @@ async function loadDetailPreview(): Promise<void> {
 /**
  * Show detail placeholder.
  */
-function showDetailPlaceholder(message = 'Enable 100% Detail to view'): void {
+function showDetailPlaceholder(message = ''): void {
   if (detailWrapper) {
     detailWrapper.classList.add('hidden');
   }
@@ -988,29 +1007,6 @@ function showDetailPlaceholder(message = 'Enable 100% Detail to view'): void {
   }
   if (detailInfo) {
     detailInfo.textContent = '';
-  }
-}
-
-/**
- * Handle lens enable/disable toggle.
- */
-function handleLensToggle(): void {
-  if (isRunning) return;
-
-  isLensEnabled = lensEnabledCheckbox?.checked ?? false;
-
-  if (isLensEnabled) {
-    showDetailPanel();
-    showLensOverlay();
-    // Wait for detail panel to be visible before initializing lens
-    requestAnimationFrame(() => {
-      initializeLensForItem();
-    });
-  } else {
-    hideDetailPanel();
-    hideLensOverlay();
-    currentLensPosition = null;
-    showDetailPlaceholder();
   }
 }
 
@@ -2701,11 +2697,6 @@ async function init(): Promise<void> {
     });
   });
 
-  // Lens (100% detail) controls
-  if (lensEnabledCheckbox) {
-    lensEnabledCheckbox.addEventListener('change', handleLensToggle);
-  }
-
   // Lens drag handlers
   if (lensRect) {
     lensRect.addEventListener('mousedown', handleLensDragStart);
@@ -2748,6 +2739,8 @@ async function init(): Promise<void> {
   // Initialize preview state
   setTransformButtonsEnabled(false);
   showPreviewPlaceholder();
+  showDetailPanel();
+  showLensOverlay();
 
   // Subscribe to store changes
   store.subscribe((state, event) => {

@@ -75,9 +75,10 @@
             <span class="preview-title">Preview</span>
             <span id="preview-info" class="preview-info"></span>
           </div>
+          <div class="preview-caption">Select an image to preview</div>
           <div id="preview-container" class="preview-container">
             <div id="preview-placeholder" class="preview-placeholder">
-              <span class="preview-placeholder-text">Select an image to preview</span>
+              <span class="preview-placeholder-text"></span>
             </div>
             <div id="preview-wrapper" class="preview-wrapper hidden">
               <img id="preview-image" class="preview-image" alt="Preview" />
@@ -121,13 +122,6 @@
             <button id="flip-v-btn" class="btn btn-icon" title="Flip vertical">⇅</button>
             <button id="reset-transform-btn" class="btn btn-small" title="Reset transformations">Reset</button>
           </div>
-          <!-- Lens toggle control -->
-          <div class="lens-controls">
-            <label class="lens-toggle">
-              <input type="checkbox" id="lens-enabled" />
-              <span>100% Detail</span>
-            </label>
-          </div>
           <!-- Crop controls -->
           <div class="crop-controls">
             <label class="crop-toggle">
@@ -151,7 +145,7 @@
       </div>
       
       <!-- Detail preview panel (100% zoom) -->
-      <div class="main-detail hidden" id="detail-panel-container">
+      <div class="main-detail" id="detail-panel-container">
         <div id="detail-panel" class="detail-panel">
           <div class="detail-header">
             <span class="detail-title">100% Detail</span>
@@ -159,7 +153,7 @@
           </div>
           <div id="detail-container" class="detail-container">
             <div id="detail-placeholder" class="detail-placeholder">
-              <span class="detail-placeholder-text">Enable 100% Detail to view</span>
+              <span class="detail-placeholder-text"></span>
             </div>
             <div id="detail-wrapper" class="detail-wrapper hidden">
               <img id="detail-image" class="detail-image" alt="Detail preview" />
