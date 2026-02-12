@@ -829,23 +829,54 @@ Goal: drag exported files out of app; best-effort move semantics; collision prom
 Goal: block outbound network, disable navigation/new windows, ensure temp cleanup.
 
 ### N1. Offline enforcement
-- [ ] Block `http:`, `https:`, `ws:`, `wss:` via Electron session webRequest
-- [ ] Disable navigation and new windows
-- [ ] Prefer denying network APIs where possible
+- [x] Block `http:`, `https:`, `ws:`, `wss:` via Electron session webRequest
+- [x] Disable navigation and new windows
+- [x] Prefer denying network APIs where possible
 
 ### N2. Tests
-- [ ] Unit test URL-blocking predicate (allow file/app URLs, deny network schemes)
+- [x] Unit test URL-blocking predicate (allow file/app URLs, deny network schemes)
 
 ### N3. Temp files cleanup
-- [ ] Audit any temp file usage
-- [ ] Ensure temp files (if any) are deleted promptly and on shutdown
+- [x] Audit any temp file usage
+- [x] Ensure temp files (if any) are deleted promptly and on shutdown
+
+### Acceptance
+- [x] Network requests are blocked in production mode
+- [x] Navigation to external URLs is prevented
+- [x] New window creation is blocked
+- [x] Temp files are cleaned up on startup
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (642/642 passing)
+- [x] Run full test suite (866/866 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
+
+### Phase N Notes (2026-02-12)
+- Created `src/main/security.ts` with offline enforcement:
+  - `shouldBlockUrl()` - pure predicate function for URL blocking decisions
+  - `BLOCKED_SCHEMES` - http:, https:, ws:, wss:
+  - `ALLOWED_SCHEMES` - file:, data:, blob:, chrome-extension:, devtools:
+  - `applyNetworkBlocking()` - blocks network requests via session.webRequest
+  - `applyWindowSecurity()` - disables navigation and new window creation
+  - Network blocking disabled in development mode (for Vite dev server)
+  - 23 unit tests covering all URL blocking scenarios
+- Created `src/main/cleanup.ts` with temp file management:
+  - `cleanupTempFiles()` - async cleanup of leftover temp files on startup
+  - `cleanupTempFilesSync()` - sync cleanup for shutdown
+  - Cleans up `settings.json.tmp` left from atomic write failures
+  - 10 integration tests
+- Updated `src/main/main.ts`:
+  - Added sandbox: true, webSecurity: true, allowRunningInsecureContent: false
+  - Applies security measures on app ready
+  - Applies per-window security restrictions
+  - Cleans up temp files on startup
+- Audited temp file usage:
+  - Clipboard buffers are in-memory only (no disk temp files)
+  - Settings uses atomic write with temp file that is renamed (cleaned on startup)
+  - No other temp file usage found
+- Total: 866 passing tests (33 new tests: 23 security + 10 cleanup)
 
 ---
 

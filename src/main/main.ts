@@ -1,6 +1,8 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
 import { registerIpcHandlers } from './ipc';
+import { applySecurity, applyWindowSecurity } from './security';
+import { cleanupTempFiles } from './cleanup';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -12,8 +14,15 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Additional security settings
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
   });
+
+  // Apply per-window security restrictions
+  applyWindowSecurity(mainWindow);
 
   // In development, load from Vite dev server
   // In production, load from built files
@@ -29,7 +38,13 @@ function createWindow(): void {
   });
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Apply security measures (network blocking)
+  applySecurity();
+
+  // Clean up any leftover temp files from previous sessions
+  await cleanupTempFiles();
+
   registerIpcHandlers();
   createWindow();
 

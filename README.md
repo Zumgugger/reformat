@@ -24,6 +24,9 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - **Output estimates: estimated dimensions and file size shown in settings panel**
 - **Drag-out export: drag completed files to move them to another location**
 - **Context menu for exported items: Show in folder, Copy path**
+- **Offline enforcement: blocks all outbound network requests (http/https/ws/wss)**
+- **Security hardening: disables navigation and new window creation**
+- **Temp file cleanup: automatic cleanup of stale temp files on startup**
 
 ## Development Setup
 
@@ -68,6 +71,8 @@ src/
     preview.ts   # Preview image generation
     clipboard.ts # Clipboard image import
     dragOut.ts   # Drag-out export (Electron drag API)
+    security.ts  # Offline enforcement (network blocking)
+    cleanup.ts   # Temp file cleanup
     settingsStore.ts  # Settings persistence
     ipc.ts       # IPC handlers
     processor/   # Image processing pipeline
@@ -148,13 +153,13 @@ git push origin main
 
 ## Known Limitations
 
-V1 is currently in Phase M (drag-out export complete).
+V1 is currently in Phase N (hardening complete).
 - Animated GIF/WebP files are rejected
 - Import is non-recursive (subfolders are skipped)
 - Settings are saved to user data directory on change
 - HEIC encode support detection not yet implemented
-- Network blocking not yet implemented (planned for Phase N)
-- 833 tests passing
+- Network blocking is disabled in development mode (to allow Vite dev server)
+- 866 tests passing
 
 ## License
 
