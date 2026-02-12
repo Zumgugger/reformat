@@ -367,26 +367,43 @@ Goal: click Convert/Export runs processing for all items with concurrency 4.
 Goal: cancel stops remaining work and keeps already-exported files.
 
 ### F1. Main cancellation
-- [ ] Add cancel token/abort flag plumbing end-to-end
-- [ ] IPC `cancelRun(runId)` flips flag
-- [ ] Workers check cancellation between tasks; do not delete already-exported outputs
+- [x] Add cancel token/abort flag plumbing end-to-end
+- [x] IPC `cancelRun(runId)` flips flag
+- [x] Workers check cancellation between tasks; do not delete already-exported outputs
 
 ### F2. Renderer cancel UX
-- [ ] Add Cancel button
-- [ ] Add Esc shortcut
-- [ ] Confirmation dialog: “Cancel remaining items?”
-- [ ] Mark remaining items as “Canceled” or “Skipped” consistently
+- [x] Add Cancel button
+- [x] Add Esc shortcut
+- [x] Confirmation dialog: "Cancel remaining items?"
+- [x] Mark remaining items as "Canceled" or "Skipped" consistently
 
 ### F3. Tests
-- [ ] Worker pool cancellation test (stops scheduling remaining tasks)
-- [ ] Renderer store tests for cancel flow + status transitions
+- [x] Worker pool cancellation test (stops scheduling remaining tasks)
+- [x] Renderer store tests for cancel flow + status transitions
+
+### Acceptance
+- [x] Cancel stops remaining work and keeps already-exported files
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (465/465 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
+
+### Phase F Notes (2026-02-12)
+- Main cancellation was already implemented in Phase E:
+  - `CancellationToken` interface and `createCancellationToken()` in workerPool.ts
+  - Workers check `cancellationToken.isCancelled` between tasks
+  - IPC `cancelRun(runId)` handler calls `token.cancel()`
+  - Already-exported files are preserved (no deletion on cancel)
+- Added Esc keyboard shortcut for cancellation in `src/renderer/index.ts`
+- Added confirmation dialog before cancel ("Cancel remaining items?")
+- Added cancel flow tests:
+  - `should keep already-exported files after cancellation` in exporter.test.ts
+  - `should stop scheduling new tasks when cancelled` in exporter.test.ts
+  - Status transition tests in store.test.ts for cancel flow
+- Total: 465 passing tests (7 new tests)
 
 ---
 

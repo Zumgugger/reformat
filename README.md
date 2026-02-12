@@ -10,7 +10,8 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - Supported formats: JPG, PNG, HEIC, WebP, TIFF, BMP, GIF (static only)
 - Matrix-style dark theme UI
 - Concurrent export with progress tracking (concurrency: 4)
-- Cancellation support during batch processing
+- Cancellation support during batch processing (Cancel button or Esc key)
+- Settings persistence across sessions
 
 ## Development Setup
 

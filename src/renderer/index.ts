@@ -189,16 +189,33 @@ async function startExport(): Promise<void> {
 }
 
 /**
- * Cancel current export run.
+ * Cancel current export run with confirmation dialog.
  */
-async function cancelExport(): Promise<void> {
-  if (!currentRunId) return;
+async function cancelExport(skipConfirm = false): Promise<void> {
+  if (!currentRunId || !isRunning) return;
+  
+  // Show confirmation dialog unless skipped
+  if (!skipConfirm) {
+    const confirmed = window.confirm('Cancel remaining items?');
+    if (!confirmed) return;
+  }
   
   try {
     await window.reformat.cancelRun(currentRunId);
     store.setStatus('Canceling...');
   } catch (error) {
     console.error('Cancel failed:', error);
+  }
+}
+
+/**
+ * Handle keyboard shortcuts.
+ */
+function handleKeyDown(event: KeyboardEvent): void {
+  // Esc key to cancel export
+  if (event.key === 'Escape' && isRunning) {
+    event.preventDefault();
+    cancelExport();
   }
 }
 
@@ -671,6 +688,9 @@ async function init(): Promise<void> {
   setupDragAndDrop();
   setupSettingsPanel();
 
+  // Keyboard shortcuts
+  document.addEventListener('keydown', handleKeyDown);
+
   selectFilesBtn.addEventListener('click', handleSelectFiles);
   addMoreBtn.addEventListener('click', handleSelectFiles);
   clearAllBtn.addEventListener('click', () => {
@@ -681,8 +701,8 @@ async function init(): Promise<void> {
   // Convert button
   convertBtn.addEventListener('click', startExport);
   
-  // Cancel button
-  cancelBtn.addEventListener('click', cancelExport);
+  // Cancel button (with confirmation dialog)
+  cancelBtn.addEventListener('click', () => cancelExport());
 
   // Subscribe to store changes
   store.subscribe((state, event) => {

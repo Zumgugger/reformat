@@ -436,5 +436,95 @@ describe('exporter', () => {
       expect(metadata.width).toBe(400);
       expect(metadata.height).toBe(300);
     });
+
+    it('should keep already-exported files after cancellation', async () => {
+      // Create multiple images for batch processing
+      const items: ImageItem[] = [];
+      for (let i = 0; i < 12; i++) {
+        const sourcePath = await createTestImage(`keep-exported-${i}.jpg`);
+        items.push(createImageItem(sourcePath, `keep-item-${i}`, `keep-${i}.jpg`));
+      }
+
+      const config: RunConfig = {
+        outputFormat: 'jpg',
+        resizeSettings: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        items: items.map(item => ({
+          itemId: item.id,
+          transform: DEFAULT_TRANSFORM,
+          crop: DEFAULT_CROP,
+        })),
+      };
+
+      const cancellationToken = createCancellationToken();
+
+      const job: ExportJob = {
+        runId: generateRunId(),
+        items,
+        config,
+        cancellationToken,
+      };
+
+      // Cancel after a very short delay to let at most a few items complete
+      setTimeout(() => cancellationToken.cancel(), 10);
+
+      const result = await exportImages(job);
+
+      // Verify that completed items have their files preserved
+      const completedResults = result.results.filter(r => r.status === 'completed');
+      
+      for (const completedResult of completedResults) {
+        expect(completedResult.outputPath).toBeDefined();
+        const exists = await fileExists(completedResult.outputPath!);
+        expect(exists).toBe(true);
+      }
+
+      // Total should match: completed + canceled (+ any failed)
+      expect(result.summary.succeeded + result.summary.canceled + result.summary.failed).toBe(items.length);
+      
+      // At least verify we got all results back (either completed or canceled)
+      expect(result.results.length).toBe(items.length);
+    });
+
+    it('should stop scheduling new tasks when cancelled', async () => {
+      // Create enough images to exceed concurrency
+      const items: ImageItem[] = [];
+      for (let i = 0; i < 12; i++) {
+        const sourcePath = await createTestImage(`stop-sched-${i}.jpg`);
+        items.push(createImageItem(sourcePath, `stop-item-${i}`, `stop-${i}.jpg`));
+      }
+
+      const config: RunConfig = {
+        outputFormat: 'jpg',
+        resizeSettings: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        items: items.map(item => ({
+          itemId: item.id,
+          transform: DEFAULT_TRANSFORM,
+          crop: DEFAULT_CROP,
+        })),
+      };
+
+      const cancellationToken = createCancellationToken();
+      const progressUpdates: ExportProgress[] = [];
+
+      const job: ExportJob = {
+        runId: generateRunId(),
+        items,
+        config,
+        cancellationToken,
+      };
+
+      // Cancel immediately to verify no new tasks are started
+      cancellationToken.cancel();
+
+      const result = await exportImages(job, (progress) => {
+        progressUpdates.push({ ...progress });
+      });
+
+      // All items should be canceled since we cancelled immediately
+      expect(result.summary.canceled).toBe(items.length);
+      expect(result.summary.succeeded).toBe(0);
+    });
   });
 });

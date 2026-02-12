@@ -262,4 +262,70 @@ describe('store', () => {
       expect(info.size).toBe('100.0 MiB');
     });
   });
+
+  describe('status transitions', () => {
+    it('transitions from ready to processing state', () => {
+      const store = createStore();
+      
+      expect(store.getState().statusMessage).toBe('Ready');
+      expect(store.getState().importing).toBe(false);
+      
+      store.setImporting(true);
+      store.setStatus('Processing...');
+      
+      expect(store.getState().importing).toBe(true);
+      expect(store.getState().statusMessage).toBe('Processing...');
+    });
+
+    it('transitions to canceling state', () => {
+      const store = createStore();
+      store.setImporting(true);
+      store.setStatus('Processing...');
+      
+      store.setStatus('Canceling...');
+      
+      expect(store.getState().statusMessage).toBe('Canceling...');
+    });
+
+    it('transitions to canceled status with count', () => {
+      const store = createStore();
+      store.setImporting(true);
+      store.setStatus('Processing...');
+      
+      store.setStatus('3 converted, 2 canceled');
+      store.setImporting(false);
+      
+      expect(store.getState().statusMessage).toBe('3 converted, 2 canceled');
+      expect(store.getState().importing).toBe(false);
+    });
+
+    it('emits status events during cancel flow', () => {
+      const store = createStore();
+      const events: string[] = [];
+      
+      store.subscribe((_state, event) => {
+        events.push(event);
+      });
+      events.length = 0; // Clear initial call
+      
+      // Simulate cancel flow
+      store.setStatus('Processing...');
+      store.setStatus('Canceling...');
+      store.setStatus('2 converted, 3 canceled');
+      
+      // Each setStatus should emit 'status' and 'change'
+      expect(events.filter(e => e === 'status').length).toBe(3);
+    });
+
+    it('can clear warnings after cancel', () => {
+      const store = createStore();
+      
+      store.setStatus('Error occurred', ['Failed to process some files']);
+      expect(store.getState().warnings).toHaveLength(1);
+      
+      store.setStatus('Ready');
+      expect(store.getState().statusMessage).toBe('Ready');
+      expect(store.getState().warnings).toEqual([]);
+    });
+  });
 });
