@@ -6,7 +6,7 @@
 import './types'; // Import types to extend Window interface
 import { store, formatItemInfo } from './store';
 import { settingsStore } from './settingsStore';
-import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult, Transform, Crop, CropRatioPreset, CropRect } from './types';
+import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult, Transform, Crop, CropRatioPreset, CropRect, ClipboardPasteResult } from './types';
 import { DEFAULT_TRANSFORM, DEFAULT_CROP } from './types';
 import {
   rotateTransformCW,
@@ -250,7 +250,13 @@ async function loadPreview(): Promise<void> {
 
   const state = store.getState();
   const item = state.items.find((i) => i.id === selectedItemId);
-  if (!item || !item.sourcePath) {
+  if (!item) {
+    showPreviewPlaceholder();
+    return;
+  }
+
+  // Clipboard items have no sourcePath, file items require it
+  if (item.source === 'file' && !item.sourcePath) {
     showPreviewPlaceholder();
     return;
   }
@@ -265,10 +271,24 @@ async function loadPreview(): Promise<void> {
 
   try {
     const transform = getItemTransform(item.id);
-    const result = await window.reformat.getPreview(item.sourcePath, {
-      maxSize: 600,
-      transform,
-    });
+    
+    // Use appropriate preview API based on source
+    let result;
+    if (item.source === 'clipboard') {
+      result = await window.reformat.getClipboardPreview(item.id, {
+        maxSize: 600,
+        transform,
+      });
+      if (!result) {
+        showPreviewPlaceholder('Clipboard image not available');
+        return;
+      }
+    } else {
+      result = await window.reformat.getPreview(item.sourcePath!, {
+        maxSize: 600,
+        transform,
+      });
+    }
 
     // Check if selection changed while loading
     if (selectedItemId !== item.id) {
@@ -746,7 +766,13 @@ async function loadDetailPreview(): Promise<void> {
   if (!isLensEnabled || !currentLensPosition || isLoadingDetailPreview) return;
 
   const item = getSelectedItem();
-  if (!item || !item.sourcePath) {
+  if (!item) {
+    showDetailPlaceholder();
+    return;
+  }
+
+  // Clipboard items have no sourcePath, file items require it
+  if (item.source === 'file' && !item.sourcePath) {
     showDetailPlaceholder();
     return;
   }
@@ -765,16 +791,33 @@ async function loadDetailPreview(): Promise<void> {
       transform
     );
 
-    // Get detail preview from main process
-    const result = await window.reformat.getDetailPreview(item.sourcePath, {
-      region: {
-        left: region.left,
-        top: region.top,
-        width: region.width,
-        height: region.height,
-      },
-      transform,
-    });
+    // Get detail preview from main process (use appropriate API based on source)
+    let result;
+    if (item.source === 'clipboard') {
+      result = await window.reformat.getClipboardDetailPreview(item.id, {
+        region: {
+          left: region.left,
+          top: region.top,
+          width: region.width,
+          height: region.height,
+        },
+        transform,
+      });
+      if (!result) {
+        showDetailPlaceholder('Clipboard image not available');
+        return;
+      }
+    } else {
+      result = await window.reformat.getDetailPreview(item.sourcePath!, {
+        region: {
+          left: region.left,
+          top: region.top,
+          width: region.width,
+          height: region.height,
+        },
+        transform,
+      });
+    }
 
     // Check if lens is still enabled and item is still selected
     if (!isLensEnabled || selectedItemId !== item.id) {
@@ -1407,6 +1450,12 @@ function handleKeyDown(event: KeyboardEvent): void {
       cancelExport();
     }
   }
+
+  // Ctrl+V / Cmd+V to paste from clipboard
+  if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
+    event.preventDefault();
+    handlePaste();
+  }
 }
 
 /**
@@ -1468,6 +1517,69 @@ async function handleSelectFiles(): Promise<void> {
   } catch (error) {
     console.error('File selection failed:', error);
     store.setStatus('File selection failed', [String(error)]);
+  }
+}
+
+/**
+ * Handle paste from clipboard.
+ * When idle: replaces current list (single-item workflow).
+ * When running: appends to current queue (processed with locked settings).
+ */
+async function handlePaste(): Promise<void> {
+  try {
+    store.setImporting(true);
+    store.setStatus('Pasting from clipboard...');
+
+    const result = await window.reformat.pasteFromClipboard();
+
+    if (!result.hasImage) {
+      if (result.error) {
+        store.setStatus('Clipboard error', [result.error]);
+      } else {
+        store.setStatus('No image in clipboard');
+      }
+      store.setImporting(false);
+      return;
+    }
+
+    if (!result.item) {
+      store.setStatus('Failed to read clipboard image');
+      store.setImporting(false);
+      return;
+    }
+
+    // When idle: replace current list
+    // When running: append to queue
+    if (!isRunning) {
+      // Clear existing items and clipboard buffers
+      const existingItems = store.getState().items;
+      for (const item of existingItems) {
+        if (item.source === 'clipboard') {
+          await window.reformat.removeClipboardBuffer(item.id);
+        }
+        // Clear transform and crop state
+        itemTransforms.delete(item.id);
+        itemCrops.delete(item.id);
+      }
+      store.clearItems();
+    }
+
+    // Add the new clipboard item
+    store.addItems([result.item]);
+
+    // Select the newly added item
+    selectedItemId = result.item.id;
+    await loadPreview();
+    updateEstimates();
+
+    const action = isRunning ? 'Added' : 'Pasted';
+    store.setStatus(`${action} clipboard image`, []);
+
+  } catch (error) {
+    console.error('Clipboard paste failed:', error);
+    store.setStatus('Clipboard paste failed', [String(error)]);
+  } finally {
+    store.setImporting(false);
   }
 }
 

@@ -20,11 +20,21 @@ import {
 import {
   generatePreview,
   generateDetailPreview,
+  generatePreviewFromBuffer,
+  generateDetailPreviewFromBuffer,
   type PreviewResult,
   type PreviewOptions,
   type DetailPreviewOptions,
   type DetailPreviewResult,
 } from './preview';
+import {
+  pasteFromClipboard,
+  storeClipboardBuffer,
+  getClipboardBuffer,
+  removeClipboardBuffer,
+  clearClipboardBuffers,
+  type ClipboardPasteResult,
+} from './clipboard';
 import type { ImageItem, RunConfig, ItemResult, Transform } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
 
@@ -215,4 +225,78 @@ export function registerIpcHandlers(): void {
       });
     }
   );
+
+  // === Clipboard IPC Handlers ===
+
+  // Paste image from clipboard
+  ipcMain.handle('pasteFromClipboard', async (): Promise<ClipboardPasteResult> => {
+    const result = await pasteFromClipboard();
+
+    // If successful, store the buffer for later preview/export
+    if (result.hasImage && result.item && result.buffer) {
+      storeClipboardBuffer(result.item.id, result.buffer);
+    }
+
+    return result;
+  });
+
+  // Get preview for a clipboard item (uses stored buffer)
+  ipcMain.handle(
+    'getClipboardPreview',
+    async (
+      _event,
+      itemId: string,
+      options: { maxSize?: number; transform?: Transform }
+    ): Promise<PreviewResult | null> => {
+      const buffer = getClipboardBuffer(itemId);
+      if (!buffer) {
+        return null;
+      }
+
+      return await generatePreviewFromBuffer(buffer, {
+        maxSize: options.maxSize ?? 800,
+        transform: options.transform,
+        format: 'jpeg',
+        quality: 80,
+      });
+    }
+  );
+
+  // Get detail preview for a clipboard item (uses stored buffer)
+  ipcMain.handle(
+    'getClipboardDetailPreview',
+    async (
+      _event,
+      itemId: string,
+      options: {
+        region: { left: number; top: number; width: number; height: number };
+        transform?: Transform;
+      }
+    ): Promise<DetailPreviewResult | null> => {
+      const buffer = getClipboardBuffer(itemId);
+      if (!buffer) {
+        return null;
+      }
+
+      return await generateDetailPreviewFromBuffer(buffer, {
+        region: options.region,
+        transform: options.transform,
+        format: 'png',
+        quality: 95,
+      });
+    }
+  );
+
+  // Remove a clipboard buffer (cleanup after export or removal)
+  ipcMain.handle(
+    'removeClipboardBuffer',
+    async (_event, itemId: string): Promise<void> => {
+      removeClipboardBuffer(itemId);
+    }
+  );
+
+  // Clear all clipboard buffers (cleanup)
+  ipcMain.handle('clearClipboardBuffers', async (): Promise<void> => {
+    clearClipboardBuffers();
+  });
 }

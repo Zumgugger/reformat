@@ -134,6 +134,16 @@ export interface DetailPreviewOptions {
   transform?: Transform;
 }
 
+/** Result of clipboard paste operation */
+export interface ClipboardPasteResult {
+  /** Whether an image was found in the clipboard */
+  hasImage: boolean;
+  /** The imported image item (if hasImage is true) */
+  item?: ImageItem;
+  /** Error message if something went wrong */
+  error?: string;
+}
+
 /** Persisted settings type for IPC */
 import type { PersistedSettings } from '../shared/settings';
 import type { RunConfig } from '../shared/types';
@@ -162,6 +172,12 @@ export interface ReformatAPI {
   // Preview APIs
   getPreview: (sourcePath: string, options?: PreviewOptions) => Promise<PreviewResult>;
   getDetailPreview: (sourcePath: string, options: DetailPreviewOptions) => Promise<DetailPreviewResult>;
+  // Clipboard APIs
+  pasteFromClipboard: () => Promise<ClipboardPasteResult>;
+  getClipboardPreview: (itemId: string, options?: PreviewOptions) => Promise<PreviewResult | null>;
+  getClipboardDetailPreview: (itemId: string, options: DetailPreviewOptions) => Promise<DetailPreviewResult | null>;
+  removeClipboardBuffer: (itemId: string) => Promise<void>;
+  clearClipboardBuffers: () => Promise<void>;
 }
 
 // Extend the Window interface

@@ -20,8 +20,10 @@ import {
 
 /** Options for processing a single image */
 export interface ProcessOptions {
-  /** Source file path */
-  sourcePath: string;
+  /** Source file path (required for file sources) */
+  sourcePath?: string;
+  /** Source buffer (for clipboard items) */
+  sourceBuffer?: Buffer;
   /** Output file path */
   outputPath: string;
   /** Output format ('same' uses source format) */
@@ -314,10 +316,20 @@ export function applyCrop(
  * @returns Processing result
  */
 export async function processImage(options: ProcessOptions): Promise<ProcessResult> {
+  // Validate input source
+  const source = options.sourceBuffer ?? options.sourcePath;
+  if (!source) {
+    return {
+      success: false,
+      error: 'No source path or buffer provided',
+      warnings: [],
+    };
+  }
+
   // Handle targetMiB mode separately - it uses iterative encoding
   if (options.resize.mode === 'targetMiB') {
     return processWithTargetSize(
-      options.sourcePath,
+      source,
       options.outputPath,
       options.resize.targetMiB,
       {
@@ -334,7 +346,7 @@ export async function processImage(options: ProcessOptions): Promise<ProcessResu
   
   try {
     // Load image and auto-rotate based on EXIF orientation
-    let image = sharp(options.sourcePath).rotate();
+    let image = sharp(source).rotate();
     
     // Get metadata for dimension calculations
     const metadata = await image.metadata();
@@ -516,7 +528,7 @@ export function createSharpEncodeFunction(
  * Returns the dimensions and bytes achieved.
  */
 export async function processWithTargetSize(
-  sourcePath: string,
+  source: string | Buffer,
   outputPath: string,
   targetMiB: number,
   options: {
@@ -530,8 +542,8 @@ export async function processWithTargetSize(
   const warnings: string[] = [];
   
   try {
-    // Read source file into buffer for multiple encode attempts
-    const sourceBuffer = await sharp(sourcePath).rotate().toBuffer();
+    // Read source into buffer for multiple encode attempts
+    const sourceBuffer = await sharp(source).rotate().toBuffer();
     
     // Get metadata
     const metadata = await sharp(sourceBuffer).metadata();

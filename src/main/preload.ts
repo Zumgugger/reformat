@@ -125,6 +125,16 @@ export interface DetailPreviewOptions {
   transform?: Transform;
 }
 
+/** Result of clipboard paste operation */
+export interface ClipboardPasteResult {
+  /** Whether an image was found in the clipboard */
+  hasImage: boolean;
+  /** The imported image item (if hasImage is true) */
+  item?: ImageItem;
+  /** Error message if something went wrong */
+  error?: string;
+}
+
 /** Export progress update */
 export interface ExportProgress {
   runId: string;
@@ -236,5 +246,32 @@ contextBridge.exposeInMainWorld('reformat', {
     return () => {
       ipcRenderer.removeListener('runProgress', listener);
     };
+  },
+
+  // === Clipboard APIs ===
+
+  // Paste image from clipboard
+  pasteFromClipboard: async (): Promise<ClipboardPasteResult> => {
+    return await ipcRenderer.invoke('pasteFromClipboard');
+  },
+
+  // Get preview for a clipboard item
+  getClipboardPreview: async (itemId: string, options?: PreviewOptions): Promise<PreviewResult | null> => {
+    return await ipcRenderer.invoke('getClipboardPreview', itemId, options ?? {});
+  },
+
+  // Get detail preview for a clipboard item
+  getClipboardDetailPreview: async (itemId: string, options: DetailPreviewOptions): Promise<DetailPreviewResult | null> => {
+    return await ipcRenderer.invoke('getClipboardDetailPreview', itemId, options);
+  },
+
+  // Remove a clipboard buffer
+  removeClipboardBuffer: async (itemId: string): Promise<void> => {
+    return await ipcRenderer.invoke('removeClipboardBuffer', itemId);
+  },
+
+  // Clear all clipboard buffers
+  clearClipboardBuffers: async (): Promise<void> => {
+    return await ipcRenderer.invoke('clearClipboardBuffers');
   },
 });

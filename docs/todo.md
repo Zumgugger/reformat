@@ -696,27 +696,69 @@ Goal: target size via iterative downscale within ±10% tolerance, min 48×48; sh
 
 ---
 
+## Phase L — Clipboard paste
+Goal: Ctrl+V/Cmd+V adds images from clipboard.
+
 ### L1. Main clipboard import
-- [ ] Implement `pasteFromClipboard(mode)`:
+- [x] Implement `pasteFromClipboard(mode)`:
 	- read clipboard image
 	- if empty, return none
 	- convert to PNG buffer and create `ImageItem` with source `clipboard`
 	- naming uses `clipboard_reformat` rules
 
 ### L2. Renderer behavior
-- [ ] When idle: paste replaces current list
-- [ ] When running: paste appends to queue (processed with locked settings)
+- [x] When idle: paste replaces current list
+- [x] When running: paste appends to queue (processed with locked settings)
 
 ### L3. Tests
-- [ ] Clipboard logic tests via abstraction/mocking (no real clipboard in CI)
-- [ ] Store tests: replace vs append behavior
+- [x] Clipboard logic tests via abstraction/mocking (no real clipboard in CI)
+- [x] Store tests: replace vs append behavior
+
+### Acceptance
+- [x] Ctrl+V/Cmd+V pastes clipboard image into app
+- [x] When idle: paste replaces current list
+- [x] When running: paste appends to queue
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (642/642 passing)
+- [x] Run full test suite (788/788 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
+
+### Phase L Notes (2026-02-12)
+- Created `src/main/clipboard.ts` with clipboard image handling:
+  - `readClipboardImage()` - reads clipboard image as PNG buffer
+  - `hasClipboardImage()` - checks if clipboard contains image
+  - `createClipboardImageItem()` - creates ImageItem from buffer
+  - `pasteFromClipboard()` - main entry point for clipboard import
+  - `storeClipboardBuffer()`, `getClipboardBuffer()`, etc. - in-memory buffer storage for preview/export
+  - 19 unit tests with mocked clipboard using NativeImage interface
+- Added IPC handlers in `src/main/ipc.ts`:
+  - `pasteFromClipboard` - reads clipboard and stores buffer
+  - `getClipboardPreview` - generates preview from stored buffer
+  - `getClipboardDetailPreview` - generates 1:1 detail from stored buffer
+  - `removeClipboardBuffer`, `clearClipboardBuffers` - cleanup
+- Updated `src/main/preload.ts` with clipboard APIs
+- Updated `src/renderer/types.ts` with `ClipboardPasteResult` interface
+- Updated `src/renderer/index.ts`:
+  - Added Ctrl+V/Cmd+V keyboard shortcut in `handleKeyDown()`
+  - Added `handlePaste()` function with idle/running behavior
+  - Updated `loadPreview()` to use clipboard-specific API for clipboard items
+  - Updated `loadDetailPreview()` to use clipboard-specific API for clipboard items
+- Updated `src/main/processor/pipeline.ts`:
+  - `ProcessOptions.sourceBuffer` - optional buffer input for clipboard items
+  - `processImage()` accepts either `sourcePath` or `sourceBuffer`
+  - `processWithTargetSize()` accepts either path or buffer
+- Updated `src/main/processor/exporter.ts`:
+  - Gets clipboard buffer from storage for clipboard items
+  - Uses stored buffer for processing instead of file path
+- Added 7 clipboard tests in `src/renderer/store.test.ts`:
+  - Clipboard source type support
+  - Mixed file and clipboard items
+  - `getExistingPaths` excludes clipboard items
+  - Clipboard item append behavior
+- Total: 788 passing tests (26 new tests)
 
 ---
 

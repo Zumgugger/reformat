@@ -7,6 +7,7 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - Offline-only image processing
 - Batch image resizing and format conversion
 - Drag-and-drop file/folder import
+- **Clipboard paste support (Ctrl+V / Cmd+V)**
 - Supported formats: JPG, PNG, HEIC, WebP, TIFF, BMP, GIF (static only)
 - Matrix-style dark theme UI
 - Concurrent export with progress tracking (concurrency: 4)
@@ -63,6 +64,7 @@ src/
     import.ts    # File/folder import with validation
     metadata.ts  # Image metadata extraction (sharp)
     preview.ts   # Preview image generation
+    clipboard.ts # Clipboard image import
     settingsStore.ts  # Settings persistence
     ipc.ts       # IPC handlers
     processor/   # Image processing pipeline

@@ -23,6 +23,7 @@ import {
   type PoolProgress,
   type TaskResult,
 } from './workerPool';
+import { getClipboardBuffer } from '../clipboard';
 
 /** Export job configuration */
 export interface ExportJob {
@@ -208,9 +209,34 @@ export async function exportImages(
       const itemConfig = getItemConfig(config, item.id);
       const outputPath = outputPaths[index];
 
+      // Get source: either file path or clipboard buffer
+      let sourcePath: string | undefined;
+      let sourceBuffer: Buffer | undefined;
+
+      if (item.source === 'clipboard') {
+        sourceBuffer = getClipboardBuffer(item.id);
+        if (!sourceBuffer) {
+          return {
+            itemId: item.id,
+            status: 'failed' as ItemStatus,
+            error: 'Clipboard buffer not found',
+          };
+        }
+      } else {
+        sourcePath = item.sourcePath;
+        if (!sourcePath) {
+          return {
+            itemId: item.id,
+            status: 'failed' as ItemStatus,
+            error: 'Source path not found',
+          };
+        }
+      }
+
       // Process the image
       const processResult: ProcessResult = await processImage({
-        sourcePath: item.sourcePath!,
+        sourcePath,
+        sourceBuffer,
         outputPath,
         outputFormat: config.outputFormat,
         resize: config.resizeSettings,

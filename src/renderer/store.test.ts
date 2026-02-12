@@ -328,4 +328,112 @@ describe('store', () => {
       expect(store.getState().warnings).toEqual([]);
     });
   });
+
+  describe('clipboard paste behavior', () => {
+    it('supports clipboard source type', () => {
+      const store = createStore();
+      const clipboardItem = createItem('clipboard-1', {
+        source: 'clipboard',
+        sourcePath: undefined,
+        originalName: 'clipboard',
+      });
+
+      store.addItems([clipboardItem]);
+      
+      const state = store.getState();
+      expect(state.items).toHaveLength(1);
+      expect(state.items[0].source).toBe('clipboard');
+      expect(state.items[0].sourcePath).toBeUndefined();
+    });
+
+    it('clearItems removes all items including clipboard', () => {
+      const store = createStore();
+      const fileItem = createItem('file-1');
+      const clipboardItem = createItem('clipboard-1', {
+        source: 'clipboard',
+        sourcePath: undefined,
+      });
+
+      store.addItems([fileItem, clipboardItem]);
+      expect(store.getState().items).toHaveLength(2);
+
+      store.clearItems();
+      expect(store.getState().items).toHaveLength(0);
+    });
+
+    it('supports mixed file and clipboard items', () => {
+      const store = createStore();
+      const fileItem1 = createItem('file-1');
+      const clipboardItem = createItem('clipboard-1', {
+        source: 'clipboard',
+        sourcePath: undefined,
+      });
+      const fileItem2 = createItem('file-2');
+
+      store.addItems([fileItem1, clipboardItem, fileItem2]);
+      
+      const state = store.getState();
+      expect(state.items).toHaveLength(3);
+      expect(state.items[0].source).toBe('file');
+      expect(state.items[1].source).toBe('clipboard');
+      expect(state.items[2].source).toBe('file');
+    });
+
+    it('getExistingPaths excludes clipboard items', () => {
+      const store = createStore();
+      const fileItem = createItem('file-1', { sourcePath: '/path/to/file1.jpg' });
+      const clipboardItem = createItem('clipboard-1', {
+        source: 'clipboard',
+        sourcePath: undefined,
+      });
+
+      store.addItems([fileItem, clipboardItem]);
+      
+      const existingPaths = store.getExistingPaths();
+      expect(existingPaths).toHaveLength(1);
+      expect(existingPaths[0]).toBe('/path/to/file1.jpg');
+    });
+
+    it('hasItemWithPath returns false for clipboard items', () => {
+      const store = createStore();
+      const clipboardItem = createItem('clipboard-1', {
+        source: 'clipboard',
+        sourcePath: undefined,
+      });
+
+      store.addItems([clipboardItem]);
+      
+      // Clipboard items have no path, so path lookup should return false
+      expect(store.hasItemWithPath('/any/path')).toBe(false);
+    });
+
+    it('can append clipboard items to existing file items', () => {
+      const store = createStore();
+      const fileItem = createItem('file-1');
+      store.addItems([fileItem]);
+
+      const clipboardItem = createItem('clipboard-1', {
+        source: 'clipboard',
+        sourcePath: undefined,
+      });
+      store.addItems([clipboardItem]);
+      
+      const state = store.getState();
+      expect(state.items).toHaveLength(2);
+      expect(state.items[0].id).toBe('file-1');
+      expect(state.items[1].id).toBe('clipboard-1');
+    });
+
+    it('preserves clipboard item order when adding multiple', () => {
+      const store = createStore();
+      const clip1 = createItem('clip-1', { source: 'clipboard', sourcePath: undefined });
+      const clip2 = createItem('clip-2', { source: 'clipboard', sourcePath: undefined });
+      const clip3 = createItem('clip-3', { source: 'clipboard', sourcePath: undefined });
+
+      store.addItems([clip1, clip2, clip3]);
+      
+      const state = store.getState();
+      expect(state.items.map(i => i.id)).toEqual(['clip-1', 'clip-2', 'clip-3']);
+    });
+  });
 });
