@@ -103,6 +103,8 @@ export interface ExportResult {
     succeeded: number;
     failed: number;
     canceled: number;
+    /** Number of items auto-switched from JPG to PNG for transparency */
+    autoSwitched: number;
   };
 }
 
@@ -167,6 +169,12 @@ export interface AppInfo {
   buildDate: string;
 }
 
+/** HEIC encode support detection result */
+export interface HeicSupportResult {
+  supported: boolean;
+  reason?: string;
+}
+
 /** Persisted settings type for IPC */
 import type { PersistedSettings } from '../shared/settings';
 import type { RunConfig } from '../shared/types';
@@ -214,6 +222,8 @@ export interface ReformatAPI {
   showFileInFolder: (filePath: string) => Promise<void>;
   // About API
   getAppInfo: () => Promise<AppInfo>;
+  // HEIC support API
+  getHeicEncodeSupport: () => Promise<HeicSupportResult>;
 }
 
 // Extend the Window interface

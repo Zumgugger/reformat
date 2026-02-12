@@ -6,7 +6,7 @@
 import './types'; // Import types to extend Window interface
 import { store, formatItemInfo } from './store';
 import { settingsStore } from './settingsStore';
-import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult, Transform, Crop, CropRatioPreset, CropRect, ClipboardPasteResult } from './types';
+import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult, Transform, Crop, CropRatioPreset, CropRect, ClipboardPasteResult, HeicSupportResult } from './types';
 import { DEFAULT_TRANSFORM, DEFAULT_CROP } from './types';
 import {
   rotateTransformCW,
@@ -79,6 +79,7 @@ const estimatesGroup = document.getElementById('estimates-group') as HTMLDivElem
 const estimateDimensionsEl = document.getElementById('estimate-dimensions') as HTMLSpanElement;
 const estimateFilesizeEl = document.getElementById('estimate-filesize') as HTMLSpanElement;
 const targetEstimateDimensionsEl = document.getElementById('target-estimate-dimensions') as HTMLSpanElement;
+const upscalingWarningEl = document.getElementById('upscaling-warning') as HTMLDivElement;
 
 // Preview DOM Elements
 const previewPanel = document.getElementById('preview-panel') as HTMLDivElement;
@@ -141,6 +142,7 @@ let currentRunId: string | null = null;
 let unsubscribeProgress: (() => void) | null = null;
 const itemStatusMap = new Map<string, string>(); // itemId -> status
 const itemOutputPaths = new Map<string, string>(); // itemId -> output path (for drag-out)
+const itemErrorMessages = new Map<string, string>(); // itemId -> error message (for tooltips)
 
 // Preview state
 let selectedItemId: string | null = null;
@@ -172,6 +174,9 @@ let lensDragStartX = 0;
 let lensDragStartY = 0;
 let lensDragStartPosition: LensPosition | null = null;
 let isLoadingDetailPreview = false;
+
+// HEIC encode support state
+let heicSupportResult: HeicSupportResult = { supported: true }; // Assume true until checked
 
 /**
  * Get or create transform for an item.
@@ -597,6 +602,10 @@ function initializeCropForItem(itemId: string): void {
   const transform = getItemTransform(itemId);
   const dims = getTransformedDimensions(item.width, item.height, transform);
   
+  // Use saved crop ratio preset from settings, or 'original' as fallback
+  const savedPreset = settingsStore.getCropRatioPreset();
+  crop.ratioPreset = savedPreset || 'original';
+  
   const aspectRatio = getAspectRatioForPreset(crop.ratioPreset, dims.width, dims.height);
   const rect = createCenteredCropRect(aspectRatio, dims.width, dims.height);
   
@@ -642,6 +651,10 @@ function handleCropRatioChange(): void {
   
   setItemCrop(item.id, crop);
   updateCropOverlay();
+  
+  // Save crop ratio preference to settings
+  settingsStore.setCropRatioPreset(crop.ratioPreset);
+  settingsStore.save();
 }
 
 /**
@@ -1425,21 +1438,29 @@ function setRunningState(running: boolean): void {
     progressBar.style.width = '0%';
     progressText.textContent = '0 / 0';
     itemStatusMap.clear();
+    itemErrorMessages.clear();
   }
 }
 
 /**
  * Update item status in UI.
  */
-function updateItemStatus(itemId: string, status: string): void {
+function updateItemStatus(itemId: string, status: string, error?: string): void {
   itemStatusMap.set(itemId, status);
-  const listItem = imageList.querySelector(`[data-id="${itemId}"]`);
+  if (error) {
+    itemErrorMessages.set(itemId, error);
+  }
+  const listItem = imageList.querySelector(`[data-id="${itemId}"]`) as HTMLElement | null;
   if (listItem) {
     // Remove all status classes
     listItem.classList.remove('processing', 'completed', 'failed', 'canceled');
     // Add new status class
     if (status === 'processing' || status === 'completed' || status === 'failed' || status === 'canceled') {
       listItem.classList.add(status);
+    }
+    // Add error tooltip for failed items
+    if (status === 'failed' && error) {
+      listItem.title = `Failed: ${error}`;
     }
   }
 }
@@ -1457,7 +1478,7 @@ function handleRunProgress(progress: ExportProgress): void {
   
   // Update item status and output path
   if (progress.latest) {
-    updateItemStatus(progress.latest.itemId, progress.latest.status);
+    updateItemStatus(progress.latest.itemId, progress.latest.status, progress.latest.error);
     // Track output path for drag-out
     if (progress.latest.outputPath) {
       itemOutputPaths.set(progress.latest.itemId, progress.latest.outputPath);
@@ -1472,6 +1493,13 @@ async function startExport(): Promise<void> {
   const items = store.getState().items;
   if (items.length === 0) {
     store.setStatus('No images to convert');
+    return;
+  }
+
+  // Block export if HEIC format is selected but unsupported
+  const currentFormat = settingsStore.getSettings().outputFormat;
+  if (currentFormat === 'heic' && !heicSupportResult.supported) {
+    store.setStatus('HEIC encoding not available', [heicSupportResult.reason || 'HEIC encoder not found on this system']);
     return;
   }
   
@@ -1498,7 +1526,7 @@ async function startExport(): Promise<void> {
     
     // Update final statuses and output paths for all items
     for (const itemResult of result.results) {
-      updateItemStatus(itemResult.itemId, itemResult.status);
+      updateItemStatus(itemResult.itemId, itemResult.status, itemResult.error);
       // Track output path for drag-out
       if (itemResult.outputPath) {
         itemOutputPaths.set(itemResult.itemId, itemResult.outputPath);
@@ -1523,7 +1551,14 @@ async function startExport(): Promise<void> {
     }
     
     const statusMsg = parts.join(', ') || 'Complete';
-    store.setStatus(statusMsg);
+    
+    // Build warnings array including auto-switch info
+    const warnings: string[] = [];
+    if (summary.autoSwitched > 0) {
+      warnings.push(`${summary.autoSwitched} image(s) switched from JPG to PNG to preserve transparency`);
+    }
+    
+    store.setStatus(statusMsg, warnings.length > 0 ? warnings : undefined);
     
     // Open output folder (only if some succeeded)
     if (summary.succeeded > 0 && outputFolder) {
@@ -1590,6 +1625,35 @@ function handleKeyDown(event: KeyboardEvent): void {
   if ((event.ctrlKey || event.metaKey) && event.key === 'v') {
     event.preventDefault();
     handlePaste();
+    return;
+  }
+
+  // Ctrl+O / Cmd+O to open file dialog
+  if ((event.ctrlKey || event.metaKey) && event.key === 'o') {
+    event.preventDefault();
+    handleSelectFiles();
+    return;
+  }
+
+  // Enter to trigger export (when idle and files selected)
+  if (event.key === 'Enter') {
+    // Don't trigger export if:
+    // - Currently running
+    // - In crop queue mode
+    // - No items loaded
+    // - Any modal is open
+    // - Focus is in an input field
+    const activeTag = document.activeElement?.tagName.toLowerCase();
+    const isInInput = activeTag === 'input' || activeTag === 'textarea' || activeTag === 'select';
+    
+    if (!isRunning && !isInCropQueueMode && store.getState().items.length > 0 && !isInInput) {
+      // Check if About modal is open
+      if (aboutModal && !aboutModal.classList.contains('hidden')) {
+        return;
+      }
+      event.preventDefault();
+      startExport();
+    }
   }
 }
 
@@ -1817,6 +1881,7 @@ function createListItem(item: ImageItem): HTMLLIElement {
   // Check if this item has been exported (has output path)
   const outputPath = itemOutputPaths.get(item.id);
   const status = itemStatusMap.get(item.id);
+  const errorMessage = itemErrorMessages.get(item.id);
   const isExported = status === 'completed' && !!outputPath;
 
   li.innerHTML = `
@@ -1829,6 +1894,11 @@ function createListItem(item: ImageItem): HTMLLIElement {
   // Add status class if available
   if (status === 'processing' || status === 'completed' || status === 'failed' || status === 'canceled') {
     li.classList.add(status);
+  }
+
+  // Add error tooltip for failed items
+  if (status === 'failed' && errorMessage) {
+    li.title = `Failed: ${errorMessage}`;
   }
   
   // Enable drag for exported items
@@ -1981,6 +2051,7 @@ function updateEstimates(): void {
     if (estimateDimensionsEl) estimateDimensionsEl.textContent = '--';
     if (estimateFilesizeEl) estimateFilesizeEl.textContent = '--';
     if (targetEstimateDimensionsEl) targetEstimateDimensionsEl.textContent = '--';
+    if (upscalingWarningEl) upscalingWarningEl.classList.add('hidden');
     return;
   }
   
@@ -2016,22 +2087,19 @@ function updateEstimates(): void {
       
       if (targetDim !== undefined) {
         if (driving === 'width') {
-          if (width > targetDim) {
-            outputWidth = targetDim;
-            outputHeight = Math.round((targetDim / width) * height);
-          }
+          // Apply scaling (both up and down)
+          outputWidth = targetDim;
+          outputHeight = Math.round((targetDim / width) * height);
         } else if (driving === 'height') {
-          if (height > targetDim) {
-            outputHeight = targetDim;
-            outputWidth = Math.round((targetDim / height) * width);
-          }
+          // Apply scaling (both up and down)
+          outputHeight = targetDim;
+          outputWidth = Math.round((targetDim / height) * width);
         } else { // maxSide
           const maxSide = Math.max(width, height);
-          if (maxSide > targetDim) {
-            const scale = targetDim / maxSide;
-            outputWidth = Math.round(width * scale);
-            outputHeight = Math.round(height * scale);
-          }
+          // Apply scaling (both up and down)
+          const scale = targetDim / maxSide;
+          outputWidth = Math.round(width * scale);
+          outputHeight = Math.round(height * scale);
         }
       }
     } else {
@@ -2085,6 +2153,16 @@ function updateEstimates(): void {
       estimateFilesizeEl.textContent = 'varies';
     }
   }
+
+  // Check for upscaling and show warning
+  const isUpscaling = outputWidth > width || outputHeight > height;
+  if (upscalingWarningEl) {
+    if (isUpscaling) {
+      upscalingWarningEl.classList.remove('hidden');
+    } else {
+      upscalingWarningEl.classList.add('hidden');
+    }
+  }
 }
 
 /**
@@ -2109,13 +2187,25 @@ function renderSettingsPanel(): void {
     keepRatioCheckbox.checked = settings.resize.keepRatio;
     drivingDimensionSelect.value = settings.resize.driving;
     
-    // Set the appropriate size value
-    if (settings.resize.driving === 'maxSide' && settings.resize.maxSide !== undefined) {
-      maxSizeInput.value = String(settings.resize.maxSide);
-    } else if (settings.resize.driving === 'width' && settings.resize.width !== undefined) {
-      maxSizeInput.value = String(settings.resize.width);
-    } else if (settings.resize.driving === 'height' && settings.resize.height !== undefined) {
-      maxSizeInput.value = String(settings.resize.height);
+    // Set the appropriate size value, or leave empty if no resize
+    const hasNoDimensions = 
+      settings.resize.maxSide === undefined && 
+      settings.resize.width === undefined && 
+      settings.resize.height === undefined;
+    
+    if (hasNoDimensions) {
+      // "Original size" / no resize state
+      maxSizeInput.value = '';
+      maxSizeInput.placeholder = 'Original size';
+    } else {
+      // Set the appropriate size value
+      if (settings.resize.driving === 'maxSide' && settings.resize.maxSide !== undefined) {
+        maxSizeInput.value = String(settings.resize.maxSide);
+      } else if (settings.resize.driving === 'width' && settings.resize.width !== undefined) {
+        maxSizeInput.value = String(settings.resize.width);
+      } else if (settings.resize.driving === 'height' && settings.resize.height !== undefined) {
+        maxSizeInput.value = String(settings.resize.height);
+      }
     }
   }
 
@@ -2127,6 +2217,12 @@ function renderSettingsPanel(): void {
   // Target size mode options
   if (settings.resize.mode === 'targetMiB') {
     targetMibInput.value = String(settings.resize.targetMiB);
+  }
+
+  // Crop ratio preset
+  const savedCropRatioPreset = settingsStore.getCropRatioPreset();
+  if (savedCropRatioPreset && cropRatioSelect) {
+    cropRatioSelect.value = savedCropRatioPreset;
   }
 
   // Quality slider
@@ -2299,6 +2395,52 @@ function setupSettingsPanel(): void {
 }
 
 /**
+ * Update the HEIC option in the format dropdown based on support status.
+ * Disables the option and adds a tooltip if HEIC encoding is not supported.
+ */
+function updateHeicOptionState(): void {
+  const heicOption = outputFormatSelect.querySelector('option[value="heic"]') as HTMLOptionElement | null;
+  if (!heicOption) return;
+
+  if (!heicSupportResult.supported) {
+    heicOption.disabled = true;
+    heicOption.title = heicSupportResult.reason || 'HEIC encoding not available on this system';
+    heicOption.textContent = 'HEIC (unavailable)';
+  } else {
+    heicOption.disabled = false;
+    heicOption.title = '';
+    heicOption.textContent = 'HEIC';
+  }
+}
+
+/**
+ * Check HEIC encode support and update UI accordingly.
+ * If HEIC is unsupported and the current format is HEIC, auto-switch to JPG.
+ */
+async function checkAndUpdateHeicSupport(): Promise<void> {
+  try {
+    heicSupportResult = await window.reformat.getHeicEncodeSupport();
+    console.log('HEIC encode support:', heicSupportResult);
+
+    updateHeicOptionState();
+
+    // If HEIC is unsupported and current format is HEIC, auto-switch to JPG
+    if (!heicSupportResult.supported) {
+      const currentFormat = settingsStore.getSettings().outputFormat;
+      if (currentFormat === 'heic') {
+        console.log('HEIC unsupported, auto-switching to JPG');
+        settingsStore.setOutputFormat('jpg');
+        settingsStore.save();
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to check HEIC encode support:', err);
+    // Assume supported on error to avoid blocking user
+    heicSupportResult = { supported: true };
+  }
+}
+
+/**
  * Initialize the application.
  */
 async function init(): Promise<void> {
@@ -2330,6 +2472,9 @@ async function init(): Promise<void> {
     console.error('Failed to load settings:', err);
   }
 
+  // Check HEIC encode support and update UI
+  await checkAndUpdateHeicSupport();
+
   // Set up event handlers
   setupDragAndDrop();
   setupSettingsPanel();
@@ -2346,6 +2491,7 @@ async function init(): Promise<void> {
     itemCrops.clear();
     itemStatusMap.clear();
     itemOutputPaths.clear();
+    itemErrorMessages.clear();
     store.clearItems();
     store.setStatus('Ready');
   });

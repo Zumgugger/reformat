@@ -221,6 +221,30 @@ export function createSettingsStore() {
       return true;
     },
 
+    /** Get crop ratio preset */
+    getCropRatioPreset(): string | undefined {
+      return state.settings.cropRatioPreset;
+    },
+
+    /** Update crop ratio preset */
+    setCropRatioPreset(cropRatioPreset: string | undefined): boolean {
+      if (state.locked) {
+        console.warn('Cannot modify settings while locked');
+        return false;
+      }
+
+      state = {
+        ...state,
+        settings: {
+          ...state.settings,
+          cropRatioPreset,
+        },
+      };
+      updateDirty();
+      emit('change');
+      return true;
+    },
+
     /** Update all settings at once */
     setSettings(settings: PersistedSettings): boolean {
       if (state.locked) {

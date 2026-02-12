@@ -45,6 +45,7 @@ import {
   type MoveFileResult,
 } from './dragOut';
 import { getAppInfo, type AppInfo } from './about';
+import { checkHeicEncodeSupport, type HeicSupportResult } from './heicSupport';
 import type { ImageItem, RunConfig, ItemResult, Transform } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
 
@@ -364,5 +365,12 @@ export function registerIpcHandlers(): void {
   // Get app info (version, build date)
   ipcMain.handle('getAppInfo', async (): Promise<AppInfo> => {
     return getAppInfo();
+  });
+
+  // === HEIC Support IPC Handler ===
+
+  // Check if HEIC encoding is supported
+  ipcMain.handle('getHeicEncodeSupport', async (): Promise<HeicSupportResult> => {
+    return await checkHeicEncodeSupport();
   });
 }

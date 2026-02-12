@@ -448,9 +448,9 @@ describe('pipeline', () => {
       expect(metadata.format).toBe('webp');
     });
 
-    it('should not upscale images', async () => {
+    it('should allow upscaling images', async () => {
       const sourcePath = await createTestImage('small.jpg', 200, 200, 'jpeg');
-      const outputPath = path.join(tempDir, 'no-upscale.jpg');
+      const outputPath = path.join(tempDir, 'upscaled.jpg');
 
       const result = await processImage({
         sourcePath,
@@ -463,9 +463,9 @@ describe('pipeline', () => {
       });
 
       expect(result.success).toBe(true);
-      // Should remain at original size
-      expect(result.outputWidth).toBe(200);
-      expect(result.outputHeight).toBe(200);
+      // Should be upscaled to 800x800 (spec allows upscaling)
+      expect(result.outputWidth).toBe(800);
+      expect(result.outputHeight).toBe(800);
     });
 
     it('should apply crop to center of image', async () => {
@@ -989,6 +989,93 @@ describe('pipeline', () => {
       // Should have hit minimum dimension
       expect(result.outputWidth).toBeLessThanOrEqual(100);
       expect(result.outputHeight).toBeLessThanOrEqual(100);
+    });
+  });
+
+  describe('EXIF preservation', () => {
+    it('should preserve EXIF metadata after processing', async () => {
+      // Create an image with EXIF data
+      const sourcePath = path.join(tempDir, 'exif-source.jpg');
+      await sharp({
+        create: {
+          width: 200,
+          height: 200,
+          channels: 3,
+          background: { r: 100, g: 150, b: 200 },
+        },
+      })
+        .jpeg({ quality: 90 })
+        .withMetadata({
+          exif: {
+            IFD0: {
+              Make: 'TestCamera',
+              Model: 'TestModel',
+            },
+          },
+        })
+        .toFile(sourcePath);
+
+      const outputPath = path.join(tempDir, 'exif-output.jpg');
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        sourceWidth: 200,
+        sourceHeight: 200,
+      });
+
+      expect(result.success).toBe(true);
+
+      // Verify EXIF data is preserved
+      const metadata = await sharp(outputPath).metadata();
+      expect(metadata.exif).toBeDefined();
+      // The EXIF buffer should contain our test data
+      // Note: Exact EXIF parsing is complex, we just verify it exists
+      expect(metadata.exif!.length).toBeGreaterThan(0);
+    });
+
+    it('should preserve EXIF metadata when resizing', async () => {
+      // Create an image with EXIF data
+      const sourcePath = path.join(tempDir, 'exif-resize-source.jpg');
+      await sharp({
+        create: {
+          width: 400,
+          height: 400,
+          channels: 3,
+          background: { r: 100, g: 150, b: 200 },
+        },
+      })
+        .jpeg({ quality: 90 })
+        .withMetadata({
+          exif: {
+            IFD0: {
+              Make: 'TestCamera',
+            },
+          },
+        })
+        .toFile(sourcePath);
+
+      const outputPath = path.join(tempDir, 'exif-resize-output.jpg');
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'pixels', keepRatio: true, driving: 'maxSide', maxSide: 200 },
+        quality: DEFAULT_QUALITY,
+        sourceWidth: 400,
+        sourceHeight: 400,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(200);
+      expect(result.outputHeight).toBe(200);
+
+      // Verify EXIF data is preserved after resize
+      const metadata = await sharp(outputPath).metadata();
+      expect(metadata.exif).toBeDefined();
+      expect(metadata.exif!.length).toBeGreaterThan(0);
     });
   });
 });

@@ -33,7 +33,7 @@ describe('settings constants', () => {
         mode: 'pixels',
         keepRatio: true,
         driving: 'maxSide',
-        maxSide: 1920,
+        maxSide: undefined,
       },
       quality: {
         jpg: 85,
@@ -43,12 +43,12 @@ describe('settings constants', () => {
     });
   });
 
-  it('DEFAULT_RESIZE_SETTINGS has pixels mode with maxSide', () => {
+  it('DEFAULT_RESIZE_SETTINGS has no resize (original size)', () => {
     expect(DEFAULT_RESIZE_SETTINGS).toEqual({
       mode: 'pixels',
       keepRatio: true,
       driving: 'maxSide',
-      maxSide: 1920,
+      maxSide: undefined,
     });
   });
 });
@@ -184,14 +184,17 @@ describe('validateResizeSettings', () => {
       };
       const result = validateResizeSettings(input);
       expect(result.mode).toBe('pixels');
-      // Should use default since 60000 > 50000
-      expect((result as any).maxSide).toBe(1920);
+      // Should not set maxSide since it exceeds max (represents "no resize")
+      expect((result as any).maxSide).toBeUndefined();
     });
 
-    it('ensures at least one dimension is set', () => {
+    it('allows pixels mode with no dimensions (represents "no resize")', () => {
       const input = { mode: 'pixels', keepRatio: true, driving: 'width' };
       const result = validateResizeSettings(input);
-      expect((result as any).maxSide).toBe(1920);
+      // Should NOT default to 1920 anymore - no dimensions means "no resize"
+      expect((result as any).maxSide).toBeUndefined();
+      expect((result as any).width).toBeUndefined();
+      expect((result as any).height).toBeUndefined();
     });
 
     it('defaults keepRatio to true', () => {
@@ -385,6 +388,40 @@ describe('validateSettings', () => {
     const result = validateSettings(input);
     expect(result.version).toBe(SETTINGS_VERSION);
   });
+
+  it('validates cropRatioPreset', () => {
+    // Valid preset
+    const valid = {
+      version: 1,
+      outputFormat: 'jpg',
+      resize: DEFAULT_RESIZE_SETTINGS,
+      quality: { jpg: 85, webp: 85, heic: 85 },
+      cropRatioPreset: 'golden',
+    };
+    const result1 = validateSettings(valid);
+    expect(result1.cropRatioPreset).toBe('golden');
+
+    // Invalid preset is filtered out
+    const invalid = {
+      version: 1,
+      outputFormat: 'jpg',
+      resize: DEFAULT_RESIZE_SETTINGS,
+      quality: { jpg: 85, webp: 85, heic: 85 },
+      cropRatioPreset: 'invalid-preset',
+    };
+    const result2 = validateSettings(invalid);
+    expect(result2.cropRatioPreset).toBeUndefined();
+
+    // Missing preset stays undefined
+    const missing = {
+      version: 1,
+      outputFormat: 'jpg',
+      resize: DEFAULT_RESIZE_SETTINGS,
+      quality: { jpg: 85, webp: 85, heic: 85 },
+    };
+    const result3 = validateSettings(missing);
+    expect(result3.cropRatioPreset).toBeUndefined();
+  });
 });
 
 describe('cloneSettings', () => {
@@ -542,4 +579,22 @@ describe('settingsEqual', () => {
       quality: { jpg: 85, webp: 85, heic: 70 },
     })).toBe(false);
   });
-});
+
+  it('compares cropRatioPreset correctly', () => {
+    const base: PersistedSettings = { ...DEFAULT_SETTINGS };
+    
+    // Same cropRatioPreset (both undefined)
+    expect(settingsEqual(base, { ...DEFAULT_SETTINGS })).toBe(true);
+    
+    // Different cropRatioPreset
+    expect(settingsEqual(base, {
+      ...DEFAULT_SETTINGS,
+      cropRatioPreset: 'square',
+    })).toBe(false);
+    
+    // Same cropRatioPreset (both 'golden')
+    expect(settingsEqual(
+      { ...DEFAULT_SETTINGS, cropRatioPreset: 'golden' },
+      { ...DEFAULT_SETTINGS, cropRatioPreset: 'golden' }
+    )).toBe(true);
+  });});

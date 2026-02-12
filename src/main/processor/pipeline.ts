@@ -385,22 +385,19 @@ export async function processImage(options: ProcessOptions): Promise<ProcessResu
     );
     
     // Apply resize if dimensions are specified
+    // Note: We allow upscaling per spec. Warning about upscaling is shown in renderer.
     if (targetWidth !== undefined || targetHeight !== undefined) {
-      // Skip resize if target is larger than source (don't upscale by default)
-      const shouldResize = 
-        (targetWidth !== undefined && targetWidth < currentWidth) ||
-        (targetHeight !== undefined && targetHeight < currentHeight);
-      
-      if (shouldResize) {
-        image = image.resize(targetWidth, targetHeight, {
-          fit: 'inside',
-          withoutEnlargement: true,
-        });
-      }
+      image = image.resize(targetWidth, targetHeight, {
+        fit: 'inside',
+        withoutEnlargement: false, // Allow upscaling
+      });
     }
     
     // Convert to sRGB with embedded profile (best effort)
     image = image.toColorspace('srgb');
+
+    // Preserve EXIF/metadata from source image
+    image = image.withMetadata();
     
     // Determine output format
     const targetFormat = getSharpFormat(options.outputFormat, sourceFormat);
@@ -614,6 +611,9 @@ export async function processWithTargetSize(
     
     // Convert to sRGB
     finalImage = finalImage.toColorspace('srgb');
+
+    // Preserve EXIF/metadata from source image
+    finalImage = finalImage.withMetadata();
     
     // Apply format-specific encoding
     if (targetFormat === 'jpeg') {

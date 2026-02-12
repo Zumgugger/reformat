@@ -182,6 +182,12 @@ export interface AppInfo {
   buildDate: string;
 }
 
+/** HEIC encode support result */
+export interface HeicSupportResult {
+  supported: boolean;
+  reason?: string;
+}
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('reformat', {
   // Test ping
@@ -335,5 +341,12 @@ contextBridge.exposeInMainWorld('reformat', {
   // Get app info (version, build date)
   getAppInfo: async (): Promise<AppInfo> => {
     return await ipcRenderer.invoke('getAppInfo');
+  },
+
+  // === HEIC Support API ===
+
+  // Check if HEIC encoding is supported
+  getHeicEncodeSupport: async (): Promise<HeicSupportResult> => {
+    return await ipcRenderer.invoke('getHeicEncodeSupport');
   },
 });

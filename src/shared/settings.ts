@@ -8,6 +8,7 @@ import type {
   ResizeSettings,
   QualitySettings,
   DrivingDimension,
+  CropRatioPreset,
 } from './types';
 import { DEFAULT_QUALITY } from './types';
 
@@ -27,6 +28,8 @@ export interface PersistedSettings {
   resize: ResizeSettings;
   /** Quality settings per format */
   quality: QualitySettings;
+  /** Crop ratio preset selection persisted across sessions */
+  cropRatioPreset?: CropRatioPreset;
 }
 
 /**
@@ -35,13 +38,14 @@ export interface PersistedSettings {
 export type RawSettings = Record<string, unknown>;
 
 /**
- * Default resize settings (pixels mode, 1920 max side, keep ratio).
+ * Default resize settings: no resize (keep original pixel size).
+ * Per spec: "On first launch (no saved settings yet): default is 'no resize'"
  */
 export const DEFAULT_RESIZE_SETTINGS: ResizeSettings = {
   mode: 'pixels',
   keepRatio: true,
   driving: 'maxSide',
-  maxSide: 1920,
+  maxSide: undefined, // No resize when undefined
 };
 
 /**
@@ -149,10 +153,8 @@ export function validateResizeSettings(raw: unknown): ResizeSettings {
     result.maxSide = Math.round(obj.maxSide);
   }
   
-  // Ensure at least one dimension is set for pixels mode
-  if (result.width === undefined && result.height === undefined && result.maxSide === undefined) {
-    result.maxSide = 1920;
-  }
+  // If no dimensions set, leave undefined to represent "no resize" (spec default)
+  // This allows the renderer to show "Original size" state
   
   return result;
 }
@@ -217,6 +219,12 @@ export function validateSettings(raw: unknown): PersistedSettings {
   // Run migrations first
   const migrated = migrateSettings(raw as RawSettings);
   
+  // Validate crop ratio preset if present (should be one of the valid presets)
+  const validPresets: CropRatioPreset[] = ['square', 'golden', '16:9', '4:3', '3:2', 'free'];
+  const cropRatioPreset = validPresets.includes(migrated.cropRatioPreset as CropRatioPreset)
+    ? (migrated.cropRatioPreset as CropRatioPreset)
+    : undefined;
+
   return {
     version: SETTINGS_VERSION,
     outputFormat: isValidOutputFormat(migrated.outputFormat)
@@ -224,6 +232,7 @@ export function validateSettings(raw: unknown): PersistedSettings {
       : DEFAULT_SETTINGS.outputFormat,
     resize: validateResizeSettings(migrated.resize),
     quality: validateQualitySettings(migrated.quality),
+    cropRatioPreset,
   };
 }
 
@@ -236,6 +245,7 @@ export function cloneSettings(settings: PersistedSettings): PersistedSettings {
     outputFormat: settings.outputFormat,
     resize: { ...settings.resize } as ResizeSettings,
     quality: { ...settings.quality },
+    cropRatioPreset: settings.cropRatioPreset,
   };
 }
 
@@ -245,6 +255,7 @@ export function cloneSettings(settings: PersistedSettings): PersistedSettings {
 export function settingsEqual(a: PersistedSettings, b: PersistedSettings): boolean {
   if (a.version !== b.version) return false;
   if (a.outputFormat !== b.outputFormat) return false;
+  if (a.cropRatioPreset !== b.cropRatioPreset) return false;
   
   // Compare resize settings
   if (a.resize.mode !== b.resize.mode) return false;

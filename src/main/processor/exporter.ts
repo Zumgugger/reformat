@@ -11,6 +11,7 @@ import type {
   RunConfig,
   ItemResult,
   ItemStatus,
+  OutputFormat,
 } from '../../shared/types';
 import { resolveOutputSubfolder, buildOutputFolderPath } from '../../shared/paths';
 import { resolveOutputPath, getClipboardBasename } from '../../shared/naming';
@@ -69,6 +70,8 @@ export interface ExportResult {
     succeeded: number;
     failed: number;
     canceled: number;
+    /** Number of items auto-switched from JPG to PNG for transparency */
+    autoSwitched: number;
   };
 }
 
@@ -80,6 +83,28 @@ export type ExportProgressCallback = (progress: ExportProgress) => void;
  */
 export function getDownloadsPath(): string {
   return app.getPath('downloads');
+}
+
+/**
+ * Determine the effective output format for an item, handling transparency auto-switch.
+ * If the image has alpha and output format is JPG, auto-switch to PNG.
+ * 
+ * @returns Object with effective format and whether a switch occurred
+ */
+export function getEffectiveOutputFormat(
+  requestedFormat: OutputFormat,
+  hasAlpha: boolean,
+  sourceFormat?: string
+): { format: OutputFormat; switched: boolean } {
+  // Only auto-switch if user explicitly selected JPG and image has alpha
+  if (requestedFormat === 'jpg' && hasAlpha) {
+    return { format: 'png', switched: true };
+  }
+  
+  // Also handle 'same' format when source is JPG but has alpha (edge case)
+  // Actually, if source is JPG, it shouldn't have real alpha, so no switch needed
+  
+  return { format: requestedFormat, switched: false };
 }
 
 /**
@@ -177,6 +202,8 @@ export async function exportImages(
   // Pre-resolve all output paths to avoid race conditions
   // Track reserved filenames within this batch
   const reservedPaths = new Set<string>();
+  // Track effective formats and auto-switch status per item
+  const effectiveFormats = new Map<string, { format: OutputFormat; switched: boolean }>();
   
   const combinedExists = async (path: string): Promise<boolean> => {
     // Check both disk and our reserved set
@@ -190,7 +217,16 @@ export async function exportImages(
   const outputPaths: string[] = [];
   for (const item of items) {
     const originalName = getItemOriginalName(item);
-    const outputExtension = getOutputExtension(config.outputFormat, item.format);
+    
+    // Determine effective output format (with transparency auto-switch)
+    const effectiveResult = getEffectiveOutputFormat(
+      config.outputFormat,
+      item.hasAlpha === true,
+      item.format
+    );
+    effectiveFormats.set(item.id, effectiveResult);
+    
+    const outputExtension = getOutputExtension(effectiveResult.format, item.format);
     
     const outputPath = await resolveOutputPath(
       outputFolder,
@@ -234,11 +270,14 @@ export async function exportImages(
       }
 
       // Process the image
+      // Get the effective format (may have been switched for transparency)
+      const effectiveFormatInfo = effectiveFormats.get(item.id) || { format: config.outputFormat, switched: false };
+      
       const processResult: ProcessResult = await processImage({
         sourcePath,
         sourceBuffer,
         outputPath,
-        outputFormat: config.outputFormat,
+        outputFormat: effectiveFormatInfo.format,
         resize: config.resizeSettings,
         quality: config.quality,
         transform: itemConfig?.transform,
@@ -247,6 +286,12 @@ export async function exportImages(
         sourceWidth: item.width,
         sourceHeight: item.height,
       });
+
+      // Collect all warnings, including auto-switch warning
+      const allWarnings: string[] = [...processResult.warnings];
+      if (effectiveFormatInfo.switched) {
+        allWarnings.push('Auto-switched from JPG to PNG to preserve transparency');
+      }
 
       if (processResult.success) {
         // Preserve timestamp (best-effort)
@@ -259,14 +304,14 @@ export async function exportImages(
           status: 'completed' as ItemStatus,
           outputPath: processResult.outputPath,
           outputBytes: processResult.outputBytes,
-          warnings: processResult.warnings.length > 0 ? processResult.warnings : undefined,
+          warnings: allWarnings.length > 0 ? allWarnings : undefined,
         };
       } else {
         return {
           itemId: item.id,
           status: 'failed' as ItemStatus,
           error: processResult.error,
-          warnings: processResult.warnings.length > 0 ? processResult.warnings : undefined,
+          warnings: allWarnings.length > 0 ? allWarnings : undefined,
         };
       }
     };
@@ -316,11 +361,15 @@ export async function exportImages(
   });
 
   // Calculate summary
+  // Count auto-switched items (those that were switched from JPG to PNG for transparency)
+  const autoSwitchedCount = Array.from(effectiveFormats.values()).filter((f) => f.switched).length;
+  
   const summary = {
     total: results.length,
     succeeded: results.filter((r) => r.status === 'completed').length,
     failed: results.filter((r) => r.status === 'failed').length,
     canceled: results.filter((r) => r.status === 'canceled').length,
+    autoSwitched: autoSwitchedCount,
   };
 
   return {

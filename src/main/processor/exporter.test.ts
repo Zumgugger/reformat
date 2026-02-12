@@ -15,6 +15,7 @@ import {
   generateRunId,
   exportImages,
   createCancellationToken,
+  getEffectiveOutputFormat,
   type ExportJob,
   type ExportProgress,
 } from './exporter';
@@ -181,6 +182,44 @@ describe('exporter', () => {
       const token = createCancellationToken();
       token.cancel();
       expect(token.isCancelled).toBe(true);
+    });
+  });
+
+  describe('getEffectiveOutputFormat', () => {
+    it('should return same format when no alpha', () => {
+      const result = getEffectiveOutputFormat('jpg', false);
+      expect(result.format).toBe('jpg');
+      expect(result.switched).toBe(false);
+    });
+
+    it('should switch from jpg to png when hasAlpha is true', () => {
+      const result = getEffectiveOutputFormat('jpg', true);
+      expect(result.format).toBe('png');
+      expect(result.switched).toBe(true);
+    });
+
+    it('should not switch png when hasAlpha is true', () => {
+      const result = getEffectiveOutputFormat('png', true);
+      expect(result.format).toBe('png');
+      expect(result.switched).toBe(false);
+    });
+
+    it('should not switch webp when hasAlpha is true', () => {
+      const result = getEffectiveOutputFormat('webp', true);
+      expect(result.format).toBe('webp');
+      expect(result.switched).toBe(false);
+    });
+
+    it('should not switch "same" format', () => {
+      const result = getEffectiveOutputFormat('same', true);
+      expect(result.format).toBe('same');
+      expect(result.switched).toBe(false);
+    });
+
+    it('should not switch heic format', () => {
+      const result = getEffectiveOutputFormat('heic', true);
+      expect(result.format).toBe('heic');
+      expect(result.switched).toBe(false);
     });
   });
 
@@ -525,6 +564,88 @@ describe('exporter', () => {
       // All items should be canceled since we cancelled immediately
       expect(result.summary.canceled).toBe(items.length);
       expect(result.summary.succeeded).toBe(0);
+    });
+
+    it('should auto-switch from JPG to PNG for images with alpha', async () => {
+      // Create a PNG image with alpha channel
+      const alphaSourcePath = path.join(tempDir, 'alpha-test.png');
+      await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 4,
+          background: { r: 100, g: 150, b: 200, alpha: 0.5 },
+        },
+      })
+        .png()
+        .toFile(alphaSourcePath);
+
+      const item: ImageItem = {
+        id: 'alpha-item-1',
+        source: 'file',
+        sourcePath: alphaSourcePath,
+        originalName: 'alpha-test.png',
+        bytes: 1000,
+        width: 100,
+        height: 100,
+        format: 'png',
+        hasAlpha: true,
+      };
+
+      const config: RunConfig = {
+        outputFormat: 'jpg', // Request JPG, but should switch to PNG
+        resizeSettings: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        items: [{ itemId: item.id, transform: DEFAULT_TRANSFORM, crop: DEFAULT_CROP }],
+      };
+
+      const job: ExportJob = {
+        runId: generateRunId(),
+        items: [item],
+        config,
+      };
+
+      const result = await exportImages(job);
+
+      expect(result.summary.succeeded).toBe(1);
+      expect(result.summary.autoSwitched).toBe(1);
+
+      // Verify the output file is PNG, not JPG
+      const itemResult = result.results[0];
+      expect(itemResult.status).toBe('completed');
+      expect(itemResult.outputPath).toBeDefined();
+      expect(itemResult.outputPath!.endsWith('.png')).toBe(true);
+
+      // Verify warning was added
+      expect(itemResult.warnings).toBeDefined();
+      expect(itemResult.warnings!.some(w => w.includes('transparency'))).toBe(true);
+    });
+
+    it('should not auto-switch when image has no alpha', async () => {
+      const sourcePath = await createTestImage('no-alpha-test.jpg');
+      const item = createImageItem(sourcePath, 'no-alpha-1', 'no-alpha-test.jpg');
+
+      const config: RunConfig = {
+        outputFormat: 'jpg',
+        resizeSettings: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        items: [{ itemId: item.id, transform: DEFAULT_TRANSFORM, crop: DEFAULT_CROP }],
+      };
+
+      const job: ExportJob = {
+        runId: generateRunId(),
+        items: [item],
+        config,
+      };
+
+      const result = await exportImages(job);
+
+      expect(result.summary.succeeded).toBe(1);
+      expect(result.summary.autoSwitched).toBe(0);
+
+      // Verify the output file is JPG
+      const itemResult = result.results[0];
+      expect(itemResult.outputPath!.endsWith('.jpg')).toBe(true);
     });
   });
 });
