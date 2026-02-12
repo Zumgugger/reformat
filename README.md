@@ -204,15 +204,14 @@ git push origin main
 
 ## Known Limitations
 
-V1 is complete through Phase O (packaging).
+V1 is complete with all spec gaps implemented.
 - Animated GIF/WebP files are rejected
 - Import is non-recursive (subfolders are skipped)
 - Settings are saved to user data directory on change
-- HEIC encode support detection not yet implemented (Gap 1)
-- Transparency auto-switch not yet implemented (Gap 2)
 - Network blocking is disabled in development mode (to allow Vite dev server)
-- Cross-platform installer builds may require native platform or additional tools (Wine for Windows from Linux)
-- 880 tests passing
+- Cross-platform installer builds may require native platform or additional tools (Wine for Windows NSIS from Linux/WSL)
+- Electron cannot run in WSL (use PowerShell/CMD for development on Windows)
+- 902 tests passing
 
 ## License
 
