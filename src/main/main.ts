@@ -7,6 +7,15 @@ import { setupApplicationMenu } from './menu';
 
 let mainWindow: BrowserWindow | null = null;
 
+const isWsl = (): boolean => {
+  const env = process.env;
+  return Boolean(env.WSL_DISTRO_NAME || env.WSL_INTEROP || env.WSLENV);
+};
+
+if (isWsl()) {
+  app.disableHardwareAcceleration();
+}
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -15,8 +24,8 @@ function createWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      // Additional security settings
-      sandbox: true,
+      // Sandbox blocks drag/drop file paths in the renderer; keep disabled for UX.
+      sandbox: false,
       webSecurity: true,
       allowRunningInsecureContent: false,
     },

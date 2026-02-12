@@ -10,9 +10,9 @@
     "build:renderer": "vite build",
     "build": "npm run build:main && npm run build:renderer",
     "dev:renderer": "vite",
-    "dev:electron": "cross-env NODE_ENV=development electron .",
+    "dev:electron": "node scripts/run-electron-dev.js",
     "dev": "npm run build:main && concurrently \"npm run dev:renderer\" \"wait-on http://localhost:5173 && npm run dev:electron\"",
-    "dev:simple": "npm run build:main && cross-env NODE_ENV=development electron .",
+    "dev:simple": "npm run build:main && node scripts/run-electron-dev.js",
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder",
     "dist:win": "npm run build && electron-builder --win",
@@ -76,14 +76,11 @@
           "arch": ["x64"]
         }
       ],
-      "icon": "build/icon.ico"
+      "signAndEditExecutable": false
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "installerIcon": "build/icon.ico",
-      "uninstallerIcon": "build/icon.ico",
-      "installerHeaderIcon": "build/icon.ico"
+      "allowToChangeInstallationDirectory": true
     },
     "mac": {
       "target": [
@@ -92,7 +89,6 @@
           "arch": ["x64", "arm64"]
         }
       ],
-      "icon": "build/icon.icns",
       "category": "public.app-category.graphics-design"
     },
     "dmg": {
@@ -111,7 +107,6 @@
     },
     "linux": {
       "target": ["AppImage"],
-      "icon": "build/icon.png",
       "category": "Graphics"
     }
   }

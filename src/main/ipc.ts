@@ -1,4 +1,6 @@
-import { ipcMain, BrowserWindow } from 'electron';
+import { app, ipcMain, BrowserWindow } from 'electron';
+import { promises as fs } from 'fs';
+import path from 'path';
 import { selectFiles, importDroppedPaths, ImportDroppedResult, SelectFilesResult } from './import';
 import { createImageItems } from './metadata';
 import {
@@ -48,6 +50,7 @@ import { getAppInfo, type AppInfo } from './about';
 import { checkHeicEncodeSupport, type HeicSupportResult } from './heicSupport';
 import type { ImageItem, RunConfig, ItemResult, Transform } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
+import { hasValidExtension } from '../shared/supportedFormats';
 
 /** Result of full import with metadata extraction */
 export interface ImportWithMetadataResult {
@@ -78,6 +81,84 @@ export function registerIpcHandlers(): void {
     'importDroppedPaths',
     async (_event, paths: string[], existingPaths: string[] = []): Promise<ImportDroppedResult> => {
       return await importDroppedPaths(paths, existingPaths);
+    }
+  );
+
+  ipcMain.handle(
+    'importDroppedFiles',
+    async (
+      _event,
+      files: Array<{ name: string; data: ArrayBuffer }>
+    ): Promise<ImportWithMetadataResult> => {
+      const importWarnings: { type: string; path: string; message: string }[] = [];
+      const metadataFailures: { path: string; reason: string }[] = [];
+      const collectedPaths: string[] = [];
+
+      if (!files || files.length === 0) {
+        return {
+          items: [],
+          duplicateCount: 0,
+          importWarnings,
+          metadataFailures,
+        };
+      }
+
+      const batchId = `${Date.now()}-${process.pid}-${Math.random().toString(36).slice(2)}`;
+      const baseDir = path.join(app.getPath('temp'), 'reformat-drop', batchId);
+      await fs.mkdir(baseDir, { recursive: true });
+
+      for (const file of files) {
+        const safeName = path.basename(file.name || 'unknown');
+
+        if (!safeName) {
+          importWarnings.push({
+            type: 'no-extension',
+            path: file.name,
+            message: 'Skipped file without a name',
+          });
+          continue;
+        }
+
+        if (!hasValidExtension(safeName)) {
+          const ext = path.extname(safeName);
+          if (!ext) {
+            importWarnings.push({
+              type: 'no-extension',
+              path: safeName,
+              message: `Skipped file without extension: ${safeName}`,
+            });
+          } else {
+            importWarnings.push({
+              type: 'unsupported-extension',
+              path: safeName,
+              message: `Unsupported format: ${safeName}`,
+            });
+          }
+          continue;
+        }
+
+        const targetPath = path.join(baseDir, safeName);
+
+        try {
+          await fs.writeFile(targetPath, Buffer.from(file.data));
+          collectedPaths.push(targetPath);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message : 'Failed to write temp file';
+          metadataFailures.push({
+            path: safeName,
+            reason,
+          });
+        }
+      }
+
+      const metadataResult = await createImageItems(collectedPaths);
+
+      return {
+        items: metadataResult.items,
+        duplicateCount: 0,
+        importWarnings,
+        metadataFailures: [...metadataFailures, ...metadataResult.failed],
+      };
     }
   );
 

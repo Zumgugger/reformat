@@ -175,6 +175,11 @@ export interface HeicSupportResult {
   reason?: string;
 }
 
+export interface DroppedFilePayload {
+  name: string;
+  data: ArrayBuffer;
+}
+
 /** Persisted settings type for IPC */
 import type { PersistedSettings } from '../shared/settings';
 import type { RunConfig } from '../shared/types';
@@ -190,6 +195,9 @@ export interface ReformatAPI {
   importWithMetadata: (
     droppedPaths: string[],
     existingPaths?: string[]
+  ) => Promise<ImportWithMetadataResult>;
+  importDroppedFiles: (
+    files: DroppedFilePayload[]
   ) => Promise<ImportWithMetadataResult>;
   loadSettings: () => Promise<PersistedSettings>;
   saveSettings: (settings: PersistedSettings) => Promise<void>;

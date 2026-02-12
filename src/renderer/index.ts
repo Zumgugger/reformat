@@ -1704,6 +1704,54 @@ async function importFiles(paths: string[]): Promise<void> {
   }
 }
 
+async function importDroppedFileBuffers(files: FileList): Promise<void> {
+  if (!files || files.length === 0) return;
+
+  store.setImporting(true);
+  store.setStatus('Importing dropped files...');
+
+  try {
+    const payloads = await Promise.all(
+      Array.from(files).map(async (file) => ({
+        name: file.name,
+        data: await file.arrayBuffer(),
+      }))
+    );
+
+    const result = await window.reformat.importDroppedFiles(payloads);
+
+    if (result.items.length > 0) {
+      store.addItems(result.items);
+    }
+
+    const warnings: string[] = [];
+    if (result.duplicateCount > 0) {
+      warnings.push(`${result.duplicateCount} duplicate(s) skipped`);
+    }
+    if (result.importWarnings.length > 0) {
+      const unsupported = result.importWarnings.filter((w) => w.type === 'unsupported-extension').length;
+      if (unsupported > 0) {
+        warnings.push(`${unsupported} unsupported file(s)`);
+      }
+    }
+    if (result.metadataFailures.length > 0) {
+      warnings.push(`${result.metadataFailures.length} file(s) could not be read`);
+    }
+
+    const added = result.items.length;
+    const statusMsg = added > 0
+      ? `Added ${added} image${added !== 1 ? 's' : ''}`
+      : 'No images added';
+
+    store.setStatus(statusMsg, warnings);
+  } catch (error) {
+    console.error('Drop import failed:', error);
+    store.setStatus('Drop import failed', [String(error)]);
+  } finally {
+    store.setImporting(false);
+  }
+}
+
 /**
  * Handle file selection via dialog.
  */
@@ -1788,18 +1836,126 @@ async function handlePaste(): Promise<void> {
  * Set up drag and drop handlers.
  */
 function setupDragAndDrop(): void {
+  const normalizeDroppedPath = (rawPath: string): string => {
+    let normalized = rawPath.trim();
+
+    if (normalized.startsWith('file://')) {
+      try {
+        const url = new URL(normalized);
+        normalized = decodeURIComponent(url.pathname);
+      } catch {
+        return '';
+      }
+    }
+
+    if (/^\/[A-Za-z]:\//.test(normalized)) {
+      normalized = normalized.slice(1);
+    }
+
+    if (/^[A-Za-z]:\//.test(normalized)) {
+      normalized = normalized.replace(/\//g, '\\');
+    }
+
+    return normalized;
+  };
+
+  const appendPathsFromText = (rawText: string, paths: string[]): void => {
+    const lines = rawText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#'));
+
+    for (const line of lines) {
+      const normalized = normalizeDroppedPath(line);
+      if (normalized) {
+        paths.push(normalized);
+      }
+    }
+  };
+
+  const extractDroppedPaths = (event: DragEvent): string[] => {
+    const paths: string[] = [];
+    const dataTransfer = event.dataTransfer;
+
+    if (dataTransfer?.files && dataTransfer.files.length > 0) {
+      for (let i = 0; i < dataTransfer.files.length; i++) {
+        const filePath = (dataTransfer.files[i] as any).path;
+        if (filePath) {
+          paths.push(filePath);
+        }
+      }
+    }
+
+    if (paths.length === 0 && dataTransfer?.items && dataTransfer.items.length > 0) {
+      for (let i = 0; i < dataTransfer.items.length; i++) {
+        const item = dataTransfer.items[i];
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          const filePath = (file as any)?.path;
+          if (filePath) {
+            paths.push(filePath);
+          }
+        }
+      }
+    }
+
+    if (paths.length === 0 && dataTransfer) {
+      const uriList = dataTransfer.getData('text/uri-list');
+      if (uriList) {
+        appendPathsFromText(uriList, paths);
+      }
+    }
+
+    if (paths.length === 0 && dataTransfer) {
+      const plainText = dataTransfer.getData('text/plain');
+      if (plainText) {
+        appendPathsFromText(plainText, paths);
+      }
+    }
+
+    if (paths.length === 0) {
+      const fileCount = dataTransfer?.files?.length ?? 0;
+      const itemCount = dataTransfer?.items?.length ?? 0;
+
+      if (fileCount === 0 && itemCount === 0) {
+        console.warn('Drop received with no file paths', {
+          types: dataTransfer?.types,
+          fileCount,
+          itemCount,
+        });
+      }
+    }
+
+    return paths;
+  };
+
+  const setCopyDropEffect = (event: DragEvent): void => {
+    if (!event.dataTransfer) return;
+    event.dataTransfer.dropEffect = 'copy';
+    event.dataTransfer.effectAllowed = 'copy';
+  };
+
   // Prevent default drag behaviors on window
-  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    setCopyDropEffect(e);
+  });
+  window.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    setCopyDropEffect(e);
+  });
   window.addEventListener('drop', (e) => e.preventDefault());
 
   // Drop zone specific handlers
   dropZone.addEventListener('dragenter', (e) => {
     e.preventDefault();
+    setCopyDropEffect(e);
     dropZone.classList.add('drag-over');
   });
 
   dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
+    setCopyDropEffect(e);
     dropZone.classList.add('drag-over');
   });
 
@@ -1815,29 +1971,30 @@ function setupDragAndDrop(): void {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
 
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0) return;
-
-    // Extract file paths from dropped items
-    const paths: string[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      // In Electron, dropped files have a path property
-      const filePath = (file as any).path;
-      if (filePath) {
-        paths.push(filePath);
-      }
-    }
+    const paths = extractDroppedPaths(e);
 
     if (paths.length > 0) {
       await importFiles(paths);
+      return;
     }
+
+    const fileList = e.dataTransfer?.files;
+    if (fileList && fileList.length > 0) {
+      await importDroppedFileBuffers(fileList);
+      return;
+    }
+
+    store.setStatus('No files detected from drop', ['Try Select Files... as a fallback']);
   });
 
   // Also handle drop on image list container when it's visible
-  imageListContainer.addEventListener('dragenter', (e) => e.preventDefault());
+  imageListContainer.addEventListener('dragenter', (e) => {
+    e.preventDefault();
+    setCopyDropEffect(e);
+  });
   imageListContainer.addEventListener('dragover', (e) => {
     e.preventDefault();
+    setCopyDropEffect(e);
     imageListContainer.classList.add('drag-over');
   });
   imageListContainer.addEventListener('dragleave', (e) => {
@@ -1850,20 +2007,20 @@ function setupDragAndDrop(): void {
     e.preventDefault();
     imageListContainer.classList.remove('drag-over');
 
-    const files = e.dataTransfer?.files;
-    if (!files || files.length === 0) return;
-
-    const paths: string[] = [];
-    for (let i = 0; i < files.length; i++) {
-      const filePath = (files[i] as any).path;
-      if (filePath) {
-        paths.push(filePath);
-      }
-    }
+    const paths = extractDroppedPaths(e);
 
     if (paths.length > 0) {
       await importFiles(paths);
+      return;
     }
+
+    const fileList = e.dataTransfer?.files;
+    if (fileList && fileList.length > 0) {
+      await importDroppedFileBuffers(fileList);
+      return;
+    }
+
+    store.setStatus('No files detected from drop', ['Try Select Files... as a fallback']);
   });
 }
 
@@ -2044,7 +2201,7 @@ function updateQualityVisibility(): void {
  * Update estimates display based on selected item and current settings.
  */
 function updateEstimates(): void {
-  const selectedItem = selectedItemId ? store.getItem(selectedItemId) : null;
+  const selectedItem = getSelectedItem();
   
   if (!selectedItem) {
     // No item selected - show dashes

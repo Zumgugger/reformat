@@ -41,6 +41,11 @@ export interface ImportWithMetadataResult {
   metadataFailures: { path: string; reason: string }[];
 }
 
+export interface DroppedFilePayload {
+  name: string;
+  data: ArrayBuffer;
+}
+
 /** Persisted settings (interface matches shared/settings.ts) */
 export interface PersistedSettings {
   version: number;
@@ -214,6 +219,13 @@ contextBridge.exposeInMainWorld('reformat', {
     existingPaths: string[] = []
   ): Promise<ImportWithMetadataResult> => {
     return await ipcRenderer.invoke('importWithMetadata', droppedPaths, existingPaths);
+  },
+
+  // Import dropped files via buffers (when file paths are not available)
+  importDroppedFiles: async (
+    files: DroppedFilePayload[]
+  ): Promise<ImportWithMetadataResult> => {
+    return await ipcRenderer.invoke('importDroppedFiles', files);
   },
 
   // Load settings from disk
