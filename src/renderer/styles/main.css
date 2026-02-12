@@ -529,6 +529,76 @@ body {
   display: none;
 }
 
+/* Crop queue mode */
+.crop-queue-container {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md);
+  background-color: rgba(0, 170, 0, 0.1);
+  border: 2px solid var(--color-accent-dim);
+  border-radius: 4px;
+}
+
+.crop-queue-container.hidden {
+  display: none;
+}
+
+.crop-queue-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.crop-queue-icon {
+  font-size: 1.2rem;
+}
+
+.crop-queue-text {
+  color: var(--color-text-dim);
+  font-size: 0.85rem;
+}
+
+.crop-queue-progress {
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: bold;
+  color: var(--color-accent);
+  margin-bottom: var(--spacing-sm);
+  text-shadow: 0 0 5px var(--color-accent);
+}
+
+.crop-queue-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+}
+
+.crop-queue-actions .btn {
+  flex: 1;
+}
+
+.crop-queue-actions .btn-primary {
+  background-color: rgba(0, 255, 65, 0.1);
+}
+
+/* Image list item in queue mode */
+.image-list-item.queue-current {
+  background-color: rgba(0, 255, 65, 0.2);
+  border: 1px solid var(--color-accent);
+}
+
+.image-list-item.queue-pending {
+  opacity: 0.6;
+}
+
+.image-list-item.queue-done {
+  opacity: 0.5;
+}
+
+.image-list-item.queue-done .item-name::after {
+  content: ' ✓';
+  color: var(--color-accent);
+}
+
 .progress-bar-outer {
   width: 100%;
   height: 8px;

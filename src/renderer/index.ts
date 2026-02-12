@@ -83,6 +83,12 @@ const cropShadeBottom = cropOverlay?.querySelector('.crop-shade-bottom') as HTML
 const cropShadeLeft = cropOverlay?.querySelector('.crop-shade-left') as HTMLDivElement;
 const cropShadeRight = cropOverlay?.querySelector('.crop-shade-right') as HTMLDivElement;
 
+// Crop queue DOM Elements
+const cropQueueContainer = document.getElementById('crop-queue-container') as HTMLDivElement;
+const cropQueueIndex = document.getElementById('crop-queue-index') as HTMLSpanElement;
+const cropApplyBtn = document.getElementById('crop-apply-btn') as HTMLButtonElement;
+const cropCancelBtn = document.getElementById('crop-cancel-btn') as HTMLButtonElement;
+
 // Export state
 let isRunning = false;
 let currentRunId: string | null = null;
@@ -103,6 +109,13 @@ let cropDragStartX = 0;
 let cropDragStartY = 0;
 let cropDragStartRect: CropRect | null = null;
 let previewImageRect: DOMRect | null = null;
+
+// Crop queue state
+let isInCropQueueMode = false;
+let cropQueueItems: ImageItem[] = [];
+let cropQueueCurrentIndex = 0;
+let cropQueueCompletedIds: Set<string> = new Set();
+let cropQueueCanceled = false;
 
 /**
  * Get or create transform for an item.
@@ -448,11 +461,11 @@ function handleCropRatioChange(): void {
 /**
  * Handle crop drag start.
  */
-function handleCropDragStart(e: MouseEvent): void {
+function handleCropDragStart(e: MouseEvent, explicitHandle?: string): void {
   if (!selectedItemId || isRunning) return;
   
   const target = e.target as HTMLElement;
-  const handle = target.dataset.handle;
+  const handle = explicitHandle || target.dataset.handle;
   
   isCropDragging = true;
   cropDragStartX = e.clientX;
@@ -633,6 +646,270 @@ function buildRunConfig(items: ImageItem[]): RunConfig {
 }
 
 /**
+ * Check if any item in the list has crop enabled (active and not full image).
+ */
+function hasAnyCropEnabled(items: ImageItem[]): boolean {
+  for (const item of items) {
+    const crop = getItemCrop(item.id);
+    if (isCropActive(crop)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Enter crop queue mode for one-by-one crop & export.
+ */
+function enterCropQueueMode(items: ImageItem[]): void {
+  isInCropQueueMode = true;
+  cropQueueItems = [...items]; // Preserve order
+  cropQueueCurrentIndex = 0;
+  cropQueueCompletedIds = new Set();
+  cropQueueCanceled = false;
+  
+  // Lock settings for the duration
+  settingsStore.setLocked(true);
+  
+  // Hide normal action buttons, show queue UI
+  if (cropQueueContainer) {
+    cropQueueContainer.classList.remove('hidden');
+  }
+  convertBtn.classList.add('hidden');
+  addMoreBtn.disabled = true;
+  clearAllBtn.disabled = true;
+  
+  // Update the queue display
+  updateCropQueueDisplay();
+  
+  // Select and show the first item
+  const firstItem = cropQueueItems[0];
+  if (firstItem) {
+    selectItem(firstItem.id);
+    // Enable crop for the first item if not already active
+    const crop = getItemCrop(firstItem.id);
+    if (!crop.active) {
+      crop.active = true;
+      initializeCropForItem(firstItem.id);
+      setItemCrop(firstItem.id, crop);
+    }
+    updateCropOverlay();
+  }
+  
+  // Update list item styles
+  renderCropQueueListStyles();
+}
+
+/**
+ * Update crop queue index display.
+ */
+function updateCropQueueDisplay(): void {
+  if (cropQueueIndex) {
+    cropQueueIndex.textContent = `${cropQueueCurrentIndex + 1} / ${cropQueueItems.length}`;
+  }
+}
+
+/**
+ * Render queue status styles on list items.
+ */
+function renderCropQueueListStyles(): void {
+  if (!isInCropQueueMode) {
+    // Remove all queue styles
+    imageList.querySelectorAll('.image-list-item').forEach((el) => {
+      el.classList.remove('queue-current', 'queue-pending', 'queue-done');
+    });
+    return;
+  }
+  
+  cropQueueItems.forEach((item, index) => {
+    const listItem = imageList.querySelector(`[data-id="${item.id}"]`);
+    if (listItem) {
+      listItem.classList.remove('queue-current', 'queue-pending', 'queue-done');
+      
+      if (cropQueueCompletedIds.has(item.id)) {
+        listItem.classList.add('queue-done');
+      } else if (index === cropQueueCurrentIndex) {
+        listItem.classList.add('queue-current');
+      } else if (index > cropQueueCurrentIndex) {
+        listItem.classList.add('queue-pending');
+      }
+    }
+  });
+}
+
+/**
+ * Exit crop queue mode.
+ */
+function exitCropQueueMode(): void {
+  isInCropQueueMode = false;
+  cropQueueItems = [];
+  cropQueueCurrentIndex = 0;
+  cropQueueCompletedIds = new Set();
+  cropQueueCanceled = false;
+  
+  // Unlock settings
+  settingsStore.setLocked(false);
+  
+  // Restore normal UI
+  if (cropQueueContainer) {
+    cropQueueContainer.classList.add('hidden');
+  }
+  convertBtn.classList.remove('hidden');
+  addMoreBtn.disabled = false;
+  clearAllBtn.disabled = false;
+  
+  // Remove queue styles from list
+  renderCropQueueListStyles();
+}
+
+/**
+ * Process the current crop queue item (export it).
+ */
+async function processCropQueueCurrentItem(): Promise<void> {
+  if (!isInCropQueueMode || cropQueueCanceled) return;
+  
+  const currentItem = cropQueueItems[cropQueueCurrentIndex];
+  if (!currentItem) {
+    exitCropQueueMode();
+    return;
+  }
+  
+  // Disable buttons during processing
+  if (cropApplyBtn) cropApplyBtn.disabled = true;
+  
+  try {
+    // Build config for just this item
+    const config = buildRunConfig([currentItem]);
+    
+    // Export the single item
+    const result = await window.reformat.startRun([currentItem], config);
+    
+    // Mark as completed
+    cropQueueCompletedIds.add(currentItem.id);
+    updateItemStatus(currentItem.id, result.results[0]?.status || 'completed');
+    
+    // Update list styles
+    renderCropQueueListStyles();
+    
+    // Check if canceled during processing
+    if (cropQueueCanceled) {
+      finishCropQueue('canceled');
+      return;
+    }
+    
+    // Advance to next item
+    cropQueueCurrentIndex++;
+    
+    if (cropQueueCurrentIndex >= cropQueueItems.length) {
+      // All items processed
+      finishCropQueue('completed');
+    } else {
+      // Show next item
+      advanceToNextCropQueueItem();
+    }
+  } catch (error) {
+    console.error('Crop queue item processing failed:', error);
+    updateItemStatus(currentItem.id, 'failed');
+    
+    // Still advance to next item
+    cropQueueCurrentIndex++;
+    if (cropQueueCurrentIndex >= cropQueueItems.length) {
+      finishCropQueue('completed');
+    } else {
+      advanceToNextCropQueueItem();
+    }
+  } finally {
+    if (cropApplyBtn) cropApplyBtn.disabled = false;
+  }
+}
+
+/**
+ * Advance to the next item in the crop queue.
+ */
+function advanceToNextCropQueueItem(): void {
+  if (!isInCropQueueMode) return;
+  
+  const nextItem = cropQueueItems[cropQueueCurrentIndex];
+  if (!nextItem) return;
+  
+  // Reset transform for the next item (per spec: "Rotate/flip resets per item when advancing")
+  setItemTransform(nextItem.id, createIdentityTransform());
+  
+  // Initialize crop if not already active
+  const crop = getItemCrop(nextItem.id);
+  if (!crop.active) {
+    crop.active = true;
+    setItemCrop(nextItem.id, crop);
+  }
+  initializeCropForItem(nextItem.id);
+  
+  // Select the item
+  selectItem(nextItem.id);
+  
+  // Update display
+  updateCropQueueDisplay();
+  renderCropQueueListStyles();
+}
+
+/**
+ * Finish the crop queue and show summary.
+ */
+function finishCropQueue(reason: 'completed' | 'canceled'): void {
+  const completed = cropQueueCompletedIds.size;
+  const total = cropQueueItems.length;
+  const remaining = total - completed;
+  
+  // Build status message
+  let statusMsg: string;
+  if (reason === 'canceled') {
+    statusMsg = `${completed} converted, ${remaining} canceled`;
+  } else {
+    statusMsg = `${completed} converted`;
+  }
+  
+  store.setStatus(statusMsg);
+  
+  // Try to open output folder if any items were exported
+  if (completed > 0) {
+    // Get the output folder from the last successful result
+    // Note: This is a best-effort approach
+    (async () => {
+      try {
+        const downloadsPath = await window.reformat.getDownloadsPath();
+        await window.reformat.openFolder(downloadsPath);
+      } catch (err) {
+        console.warn('Failed to open output folder:', err);
+      }
+    })();
+  }
+  
+  exitCropQueueMode();
+}
+
+/**
+ * Cancel the crop queue.
+ */
+async function cancelCropQueue(): Promise<void> {
+  if (!isInCropQueueMode) return;
+  
+  // Show confirmation
+  const confirmed = window.confirm('Cancel remaining items?');
+  if (!confirmed) return;
+  
+  cropQueueCanceled = true;
+  
+  // Mark remaining items as canceled
+  for (let i = cropQueueCurrentIndex; i < cropQueueItems.length; i++) {
+    const item = cropQueueItems[i];
+    if (!cropQueueCompletedIds.has(item.id)) {
+      updateItemStatus(item.id, 'canceled');
+    }
+  }
+  
+  finishCropQueue('canceled');
+}
+
+/**
  * Update UI to reflect running state.
  */
 function setRunningState(running: boolean): void {
@@ -702,6 +979,15 @@ async function startExport(): Promise<void> {
     return;
   }
   
+  // Check if we should enter crop queue mode:
+  // - More than one item AND
+  // - At least one item has crop enabled (active and different from full image)
+  if (items.length > 1 && hasAnyCropEnabled(items)) {
+    enterCropQueueMode(items);
+    return;
+  }
+  
+  // Normal export (no crop queue)
   setRunningState(true);
   store.setStatus('Processing...');
   
@@ -782,10 +1068,14 @@ async function cancelExport(skipConfirm = false): Promise<void> {
  * Handle keyboard shortcuts.
  */
 function handleKeyDown(event: KeyboardEvent): void {
-  // Esc key to cancel export
-  if (event.key === 'Escape' && isRunning) {
+  // Esc key to cancel
+  if (event.key === 'Escape') {
     event.preventDefault();
-    cancelExport();
+    if (isInCropQueueMode) {
+      cancelCropQueue();
+    } else if (isRunning) {
+      cancelExport();
+    }
   }
 }
 
@@ -958,6 +1248,10 @@ function createListItem(item: ImageItem): HTMLLIElement {
     if ((e.target as HTMLElement).classList.contains('item-remove')) {
       return;
     }
+    // Don't allow manual selection during crop queue mode
+    if (isInCropQueueMode) {
+      return;
+    }
     selectItem(item.id);
   });
 
@@ -965,6 +1259,10 @@ function createListItem(item: ImageItem): HTMLLIElement {
   li.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
+      // Don't allow manual selection during crop queue mode
+      if (isInCropQueueMode) {
+        return;
+      }
       selectItem(item.id);
     }
   });
@@ -973,6 +1271,10 @@ function createListItem(item: ImageItem): HTMLLIElement {
   const removeBtn = li.querySelector('.item-remove') as HTMLButtonElement;
   removeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    // Don't allow removal during crop queue mode or regular run
+    if (isInCropQueueMode || isRunning) {
+      return;
+    }
     // If this item is selected, clear selection
     if (selectedItemId === item.id) {
       selectItem(null);
@@ -1301,6 +1603,14 @@ async function init(): Promise<void> {
   
   // Cancel button (with confirmation dialog)
   cancelBtn.addEventListener('click', () => cancelExport());
+
+  // Crop queue buttons
+  if (cropApplyBtn) {
+    cropApplyBtn.addEventListener('click', processCropQueueCurrentItem);
+  }
+  if (cropCancelBtn) {
+    cropCancelBtn.addEventListener('click', cancelCropQueue);
+  }
 
   // Preview transform buttons
   if (rotateCWBtn) rotateCWBtn.addEventListener('click', handleRotateCW);

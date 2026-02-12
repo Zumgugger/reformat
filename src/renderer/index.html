@@ -39,6 +39,21 @@
             <button id="convert-btn" class="btn btn-primary">Convert</button>
           </div>
           
+          <!-- Crop queue mode UI (hidden by default) -->
+          <div id="crop-queue-container" class="crop-queue-container hidden">
+            <div class="crop-queue-info">
+              <span class="crop-queue-icon">✂</span>
+              <span class="crop-queue-text">Crop mode: adjust crop for each image</span>
+            </div>
+            <div class="crop-queue-progress">
+              <span id="crop-queue-index">1 / 1</span>
+            </div>
+            <div class="crop-queue-actions">
+              <button id="crop-apply-btn" class="btn btn-primary">Apply Crop & Export</button>
+              <button id="crop-cancel-btn" class="btn btn-danger">Cancel</button>
+            </div>
+          </div>
+          
           <!-- Progress bar (hidden when not running) -->
           <div id="progress-container" class="progress-container hidden">
             <div class="progress-bar-outer">

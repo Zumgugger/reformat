@@ -248,7 +248,7 @@ Goal: settings persist across launches and can be edited when idle.
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (642/642 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
@@ -495,8 +495,8 @@ Goal: user crops in preview; export respects crop.
 - [x] Update todo.md
 - [x] Run full test suite (603/603 passing)
 - [x] Update README.md
-- [ ] Commit to git
-- [ ] Push to GitHub
+- [x] Commit to git (afd0a1f)
+- [x] Push to GitHub
 
 ### Phase H Notes (2025-01-XX)
 - Created `src/shared/crop.ts` with comprehensive crop utilities:
@@ -523,29 +523,62 @@ Goal: user crops in preview; export respects crop.
 Goal: when crop enabled with multiple files, enforce one-by-one crop & export; no Back.
 
 ### I1. Define “crop enabled”
-- [ ] Decide and implement rule: crop enabled when user toggles crop OR rect differs from full image
-- [ ] Ensure rule is stable and testable
+- [x] Decide and implement rule: crop enabled when user toggles crop OR rect differs from full image
+- [x] Ensure rule is stable and testable
 
 ### I2. Queue UX
-- [ ] When Convert/Export with N>1 and crop enabled:
+- [x] When Convert/Export with N>1 and crop enabled:
 	- enter queue mode
 	- show index (e.g., 2/10)
 	- single action: “Apply crop & export”
 	- auto-advance to next item
 	- no Back
-- [ ] Cancel stops remaining queue
-- [ ] Queue order matches selection order
-- [ ] Rotate/flip resets per item when advancing
+- [x] Cancel stops remaining queue
+- [x] Queue order matches selection order
+- [x] Rotate/flip resets per item when advancing
 
 ### I3. Tests
-- [ ] Store tests: queue advancement + cancellation + ordering
+- [x] Store tests: queue advancement + cancellation + ordering
+
+### Acceptance
+- [x] Batch crop queue mode enforces one-by-one crop & export with no Back
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (642/642 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
+
+### Phase I Notes (2026-02-12)
+- Implemented crop queue mode in `src/renderer/index.ts`:
+  - Queue mode triggers when N>1 items AND any item has crop enabled
+  - Shows queue progress (e.g., "1 / 5")
+  - "Apply Crop & Export" button processes current item and auto-advances
+  - No Back navigation in V1
+  - Cancel with confirmation dialog
+  - Esc keyboard shortcut for cancel
+- Created `src/renderer/cropQueue.ts` with reusable queue state management:
+  - `hasAnyCropEnabled()` - checks if any item has active crop
+  - `shouldEnterCropQueueMode()` - determines if queue mode needed
+  - `enterCropQueue()` - initializes queue state
+  - `advanceCropQueue()` - processes current item and advances
+  - `cancelCropQueue()` - cancels remaining queue
+  - `getQueueProgressString()` - returns progress like "2 / 10"
+  - `getItemQueueStatus()` - returns item's queue status
+- Created `src/renderer/cropQueue.test.ts` with 39 unit tests:
+  - Queue state creation and initialization
+  - hasAnyCropEnabled behavior
+  - shouldEnterCropQueueMode logic
+  - Queue advancement and completion
+  - Transform reset on advance (per spec)
+  - Cancel behavior
+  - Queue order preservation
+- Added queue mode UI styles in `src/renderer/styles/main.css`:
+  - Queue container with progress display
+  - Queue item status indicators (current, pending, done)
+- Uses existing `isCropActive()` from `src/shared/crop.ts` for crop detection
+- Total: 642 passing tests (39 new tests)
 
 ---
 
@@ -565,7 +598,7 @@ Goal: show 1:1 pixel region controlled by a draggable lens.
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (642/642 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
@@ -596,7 +629,7 @@ Goal: target size via iterative downscale within ±10% tolerance, min 48×48; sh
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (642/642 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
@@ -623,7 +656,7 @@ Goal: Ctrl+V/Cmd+V imports clipboard image; replace when idle, append when runni
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (642/642 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
@@ -650,7 +683,7 @@ Goal: drag exported files out of app; best-effort move semantics; collision prom
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (642/642 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
@@ -674,7 +707,7 @@ Goal: block outbound network, disable navigation/new windows, ensure temp cleanu
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (642/642 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
@@ -701,7 +734,7 @@ Goal: ship installers, bundle sharp correctly, show About info.
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (642/642 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub

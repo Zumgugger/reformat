@@ -17,6 +17,7 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - **Per-image transform state preserved during export**
 - **Crop with ratio presets (Free, 1:1, 4:5, 3:4, 9:16, 16:9, 2:3, 3:2)**
 - **Draggable crop overlay with rule-of-thirds grid**
+- **Batch crop queue: one-by-one crop & export when multiple images have crop enabled**
 
 ## Development Setup
 
@@ -68,6 +69,7 @@ src/
   renderer/      # UI (HTML/CSS/TypeScript)
     store.ts     # Reactive state management (images)
     settingsStore.ts  # Settings state management
+    cropQueue.ts # Batch crop queue state management
     types.ts     # Renderer type definitions
   shared/        # Shared types and utilities
     types.ts     # Domain types (ImageItem, Transform, etc.)
