@@ -128,6 +128,9 @@ export interface DetailPreviewResult {
 export interface DetailPreviewOptions {
   region: { left: number; top: number; width: number; height: number };
   transform?: Transform;
+  resize?: unknown;
+  quality?: number;
+  format?: 'jpeg' | 'png';
 }
 
 /** Result of clipboard paste operation */

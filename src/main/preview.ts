@@ -4,7 +4,7 @@
  */
 
 import sharp from 'sharp';
-import type { Transform } from '../shared/types';
+import type { Transform, ResizeSettings } from '../shared/types';
 
 /** Result of preview generation */
 export interface PreviewResult {
@@ -321,6 +321,8 @@ export interface DetailPreviewOptions {
   format?: 'jpeg' | 'png';
   /** JPEG quality (default: 90) */
   quality?: number;
+  /** Resize settings to apply before extracting region */
+  resize?: ResizeSettings;
 }
 
 /** Result of detail preview generation */
@@ -331,6 +333,60 @@ export interface DetailPreviewResult {
   width: number;
   /** Actual height of the detail preview */
   height: number;
+}
+
+/**
+ * Calculate target dimensions based on resize settings.
+ */
+function calculateTargetDimensions(
+  sourceWidth: number,
+  sourceHeight: number,
+  resize: ResizeSettings
+): { width: number | undefined; height: number | undefined } {
+  switch (resize.mode) {
+    case 'percent': {
+      const scale = resize.percent / 100;
+      return {
+        width: Math.round(sourceWidth * scale),
+        height: Math.round(sourceHeight * scale),
+      };
+    }
+    
+    case 'pixels': {
+      if (!resize.keepRatio) {
+        // Exact dimensions
+        return {
+          width: resize.width,
+          height: resize.height,
+        };
+      }
+      
+      // Keep ratio mode
+      switch (resize.driving) {
+        case 'width':
+          return { width: resize.width, height: undefined };
+        case 'height':
+          return { width: undefined, height: resize.height };
+        case 'maxSide':
+          // Resize so the larger side matches maxSide
+          if (sourceWidth >= sourceHeight) {
+            return { width: resize.maxSide, height: undefined };
+          } else {
+            return { width: undefined, height: resize.maxSide };
+          }
+        default:
+          return { width: undefined, height: undefined };
+      }
+    }
+    
+    case 'targetMiB':
+      // Target MiB mode would need iterative processing
+      // For now, return undefined (no resize in preview)
+      return { width: undefined, height: undefined };
+    
+    default:
+      return { width: undefined, height: undefined };
+  }
 }
 
 /**
@@ -348,8 +404,9 @@ export async function generateDetailPreview(
   const {
     region,
     transform,
-    format = 'png',
+    format = 'jpeg',
     quality = 90,
+    resize,
   } = options;
 
   // Load image
@@ -380,16 +437,72 @@ export async function generateDetailPreview(
     effectiveHeight = originalWidth;
   }
 
+  // Apply resize if provided (to show how detail looks after resize)
+  let regionWidth = region.width;
+  let regionHeight = region.height;
+  let regionLeft = region.left;
+  let regionTop = region.top;
+  
+  if (resize) {
+    // Calculate target dimensions
+    const targetDims = calculateTargetDimensions(effectiveWidth, effectiveHeight, resize);
+    let targetWidth = targetDims.width;
+    let targetHeight = targetDims.height;
+    
+    // If one dimension is undefined, calculate it preserving aspect ratio
+    if (targetWidth !== undefined && targetHeight === undefined) {
+      targetHeight = Math.round((targetWidth / effectiveWidth) * effectiveHeight);
+    } else if (targetHeight !== undefined && targetWidth === undefined) {
+      targetWidth = Math.round((targetHeight / effectiveHeight) * effectiveWidth);
+    }
+    
+    // Both dimensions should now be defined
+    if (targetWidth === undefined || targetHeight === undefined) {
+      // Fallback if both were undefined (shouldn't happen)
+      targetWidth = effectiveWidth;
+      targetHeight = effectiveHeight;
+    }
+    
+    // Scale the region coordinates to the resized image
+    const scaleX = targetWidth / effectiveWidth;
+    const scaleY = targetHeight / effectiveHeight;
+    
+    regionLeft = Math.round(region.left * scaleX);
+    regionTop = Math.round(region.top * scaleY);
+    regionWidth = Math.round(region.width * scaleX);
+    regionHeight = Math.round(region.height * scaleY);
+    
+    // Resize the image
+    image = image.resize(targetWidth, targetHeight, {
+      withoutEnlargement: false,
+    });
+    
+    effectiveWidth = targetWidth;
+    effectiveHeight = targetHeight;
+  }
+
   // Validate and clamp region to valid bounds
-  const left = Math.max(0, Math.min(effectiveWidth - 1, Math.round(region.left)));
-  const top = Math.max(0, Math.min(effectiveHeight - 1, Math.round(region.top)));
+  const left = Math.max(0, Math.min(effectiveWidth - 1, regionLeft));
+  const top = Math.max(0, Math.min(effectiveHeight - 1, regionTop));
   const maxWidth = effectiveWidth - left;
   const maxHeight = effectiveHeight - top;
-  const width = Math.max(1, Math.min(maxWidth, Math.round(region.width)));
-  const height = Math.max(1, Math.min(maxHeight, Math.round(region.height)));
+  const width = Math.max(1, Math.min(maxWidth, regionWidth));
+  const height = Math.max(1, Math.min(maxHeight, regionHeight));
 
   // Extract the region at 1:1 (no scaling)
   image = image.extract({ left, top, width, height });
+
+  // If the extracted region is very small (due to downscaling), upscale it using nearest-neighbor
+  // so the pixelation/compression artifacts are visible
+  if (width < 100 || height < 100) {
+    const scale = Math.max(2, Math.ceil(300 / Math.max(width, height)));
+    const newWidth = width * scale;
+    const newHeight = height * scale;
+    image = image.resize(newWidth, newHeight, {
+      kernel: 'nearest',
+      fit: 'fill',
+    });
+  }
 
   // Encode to buffer
   let buffer: Buffer;
@@ -428,8 +541,9 @@ export async function generateDetailPreviewFromBuffer(
   const {
     region,
     transform,
-    format = 'png',
+    format = 'jpeg',
     quality = 90,
+    resize,
   } = options;
 
   // Load image
@@ -457,16 +571,72 @@ export async function generateDetailPreviewFromBuffer(
     effectiveHeight = originalWidth;
   }
 
+  // Apply resize if provided (to show how detail looks after resize)
+  let regionWidth = region.width;
+  let regionHeight = region.height;
+  let regionLeft = region.left;
+  let regionTop = region.top;
+  
+  if (resize) {
+    // Calculate target dimensions
+    const targetDims = calculateTargetDimensions(effectiveWidth, effectiveHeight, resize);
+    let targetWidth = targetDims.width;
+    let targetHeight = targetDims.height;
+    
+    // If one dimension is undefined, calculate it preserving aspect ratio
+    if (targetWidth !== undefined && targetHeight === undefined) {
+      targetHeight = Math.round((targetWidth / effectiveWidth) * effectiveHeight);
+    } else if (targetHeight !== undefined && targetWidth === undefined) {
+      targetWidth = Math.round((targetHeight / effectiveHeight) * effectiveWidth);
+    }
+    
+    // Both dimensions should now be defined
+    if (targetWidth === undefined || targetHeight === undefined) {
+      // Fallback if both were undefined (shouldn't happen)
+      targetWidth = effectiveWidth;
+      targetHeight = effectiveHeight;
+    }
+    
+    // Scale the region coordinates to the resized image
+    const scaleX = targetWidth / effectiveWidth;
+    const scaleY = targetHeight / effectiveHeight;
+    
+    regionLeft = Math.round(region.left * scaleX);
+    regionTop = Math.round(region.top * scaleY);
+    regionWidth = Math.round(region.width * scaleX);
+    regionHeight = Math.round(region.height * scaleY);
+    
+    // Resize the image
+    image = image.resize(targetWidth, targetHeight, {
+      withoutEnlargement: false,
+    });
+    
+    effectiveWidth = targetWidth;
+    effectiveHeight = targetHeight;
+  }
+
   // Validate and clamp region to valid bounds
-  const left = Math.max(0, Math.min(effectiveWidth - 1, Math.round(region.left)));
-  const top = Math.max(0, Math.min(effectiveHeight - 1, Math.round(region.top)));
+  const left = Math.max(0, Math.min(effectiveWidth - 1, regionLeft));
+  const top = Math.max(0, Math.min(effectiveHeight - 1, regionTop));
   const maxWidth = effectiveWidth - left;
   const maxHeight = effectiveHeight - top;
-  const width = Math.max(1, Math.min(maxWidth, Math.round(region.width)));
-  const height = Math.max(1, Math.min(maxHeight, Math.round(region.height)));
+  const width = Math.max(1, Math.min(maxWidth, regionWidth));
+  const height = Math.max(1, Math.min(maxHeight, regionHeight));
 
   // Extract the region at 1:1 (no scaling)
   image = image.extract({ left, top, width, height });
+
+  // If the extracted region is very small (due to downscaling), upscale it using nearest-neighbor
+  // so the pixelation/compression artifacts are visible
+  if (width < 100 || height < 100) {
+    const scale = Math.max(2, Math.ceil(300 / Math.max(width, height)));
+    const newWidth = width * scale;
+    const newHeight = height * scale;
+    image = image.resize(newWidth, newHeight, {
+      kernel: 'nearest',
+      fit: 'fill',
+    });
+  }
 
   // Encode to buffer
   let outputBuffer: Buffer;

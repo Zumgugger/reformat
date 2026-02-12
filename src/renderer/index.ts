@@ -846,13 +846,36 @@ function initializeLensForItem(): void {
   const transform = getItemTransform(item.id);
   const dims = getTransformedDimensions(item.width, item.height, transform);
 
+  // Calculate the resize scale factor to make lens larger when downscaling
+  // This shows what area of the original will become the detail panel output
+  const resizeSettings = settingsStore.getSettings().resize;
+  let resizeScale = 1;
+  
+  if (resizeSettings.mode === 'percent') {
+    resizeScale = 100 / resizeSettings.percent;
+  } else if (resizeSettings.mode === 'pixels') {
+    // Calculate scale based on driving dimension
+    if (resizeSettings.driving === 'maxSide' && resizeSettings.maxSide) {
+      const maxOriginal = Math.max(dims.width, dims.height);
+      resizeScale = maxOriginal / resizeSettings.maxSide;
+    } else if (resizeSettings.driving === 'width' && resizeSettings.width) {
+      resizeScale = dims.width / resizeSettings.width;
+    } else if (resizeSettings.driving === 'height' && resizeSettings.height) {
+      resizeScale = dims.height / resizeSettings.height;
+    }
+  }
+  // For targetMiB mode, we can't know the exact scale, so use 1
+  
+  // Clamp to reasonable range (don't make lens impossibly big)
+  resizeScale = Math.max(1, Math.min(resizeScale, 20));
+
   try {
-    // Calculate lens dimensions based on detail panel size
+    // Calculate lens dimensions based on detail panel size, scaled by resize factor
     const lensDims = calculateLensDimensions(
       dims.width,
       dims.height,
-      detailWidth,
-      detailHeight,
+      detailWidth * resizeScale,
+      detailHeight * resizeScale,
       transform
     );
 
@@ -937,6 +960,21 @@ async function loadDetailPreview(): Promise<void> {
       transform
     );
 
+    // Get resize and quality settings to show impact on detail preview
+    const settings = settingsStore.getSettings();
+    const resizeSettings = settings.resize;
+    const outputFormat = settings.outputFormat;
+    
+    // Get quality for the current output format
+    let quality = 90; // default
+    if (outputFormat === 'jpg' || outputFormat === 'same') {
+      quality = settings.quality.jpg;
+    } else if (outputFormat === 'webp') {
+      quality = settings.quality.webp;
+    } else if (outputFormat === 'heic') {
+      quality = settings.quality.heic;
+    }
+
     // Get detail preview from main process (use appropriate API based on source)
     let result;
     if (item.source === 'clipboard') {
@@ -948,6 +986,9 @@ async function loadDetailPreview(): Promise<void> {
           height: region.height,
         },
         transform,
+        resize: resizeSettings,
+        quality,
+        format: 'jpeg',
       });
       if (!result) {
         showDetailPlaceholder('Clipboard image not available');
@@ -962,6 +1003,9 @@ async function loadDetailPreview(): Promise<void> {
           height: region.height,
         },
         transform,
+        resize: resizeSettings,
+        quality,
+        format: 'jpeg',
       });
     }
 
@@ -2434,6 +2478,8 @@ function setupSettingsPanel(): void {
 
         settingsStore.setResizeSettings(newSettings);
         settingsStore.save();
+        showDetailPlaceholder('Calculating...');
+        initializeLensForItem();
       }
     });
   });
@@ -2447,6 +2493,8 @@ function setupSettingsPanel(): void {
         keepRatio: keepRatioCheckbox.checked,
       });
       settingsStore.save();
+      showDetailPlaceholder('Calculating...');
+      initializeLensForItem();
     }
   });
 
@@ -2474,6 +2522,8 @@ function setupSettingsPanel(): void {
 
       settingsStore.setResizeSettings(newSettings);
       settingsStore.save();
+      showDetailPlaceholder('Calculating...');
+      initializeLensForItem();
     }
   });
 
@@ -2499,6 +2549,8 @@ function setupSettingsPanel(): void {
 
       settingsStore.setResizeSettings(newSettings);
       settingsStore.save();
+      showDetailPlaceholder('Calculating...');
+      initializeLensForItem();
     }
   });
 
@@ -2510,6 +2562,8 @@ function setupSettingsPanel(): void {
       percent,
     });
     settingsStore.save();
+    showDetailPlaceholder('Calculating...');
+    initializeLensForItem();
   });
 
   // Target MiB input
@@ -2520,12 +2574,16 @@ function setupSettingsPanel(): void {
       targetMiB,
     });
     settingsStore.save();
+    showDetailPlaceholder('Calculating...');
+    initializeLensForItem();
   });
 
   // Quality slider
   qualitySlider.addEventListener('input', () => {
     const value = parseInt(qualitySlider.value, 10);
     qualityValue.textContent = String(value);
+    showDetailPlaceholder('Calculating...');
+    loadDetailPreview();
   });
 
   qualitySlider.addEventListener('change', () => {
@@ -2544,6 +2602,8 @@ function setupSettingsPanel(): void {
     }
     
     settingsStore.save();
+    showDetailPlaceholder('Calculating...');
+    loadDetailPreview();
   });
 }
 

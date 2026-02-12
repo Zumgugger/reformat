@@ -48,7 +48,7 @@ import {
 } from './dragOut';
 import { getAppInfo, type AppInfo } from './about';
 import { checkHeicEncodeSupport, type HeicSupportResult } from './heicSupport';
-import type { ImageItem, RunConfig, ItemResult, Transform } from '../shared/types';
+import type { ImageItem, RunConfig, ItemResult, Transform, ResizeSettings } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
 import { hasValidExtension } from '../shared/supportedFormats';
 
@@ -307,13 +307,17 @@ export function registerIpcHandlers(): void {
       options: {
         region: { left: number; top: number; width: number; height: number };
         transform?: Transform;
+        resize?: unknown;
+        quality?: number;
+        format?: 'jpeg' | 'png';
       }
     ): Promise<DetailPreviewResult> => {
       return await generateDetailPreview(sourcePath, {
         region: options.region,
         transform: options.transform,
-        format: 'png', // Use PNG for 1:1 quality
-        quality: 95,
+        resize: options.resize as ResizeSettings | undefined,
+        format: options.format || 'jpeg',
+        quality: options.quality ?? 90,
       });
     }
   );
@@ -363,6 +367,9 @@ export function registerIpcHandlers(): void {
       options: {
         region: { left: number; top: number; width: number; height: number };
         transform?: Transform;
+        resize?: unknown;
+        quality?: number;
+        format?: 'jpeg' | 'png';
       }
     ): Promise<DetailPreviewResult | null> => {
       const buffer = getClipboardBuffer(itemId);
@@ -373,8 +380,9 @@ export function registerIpcHandlers(): void {
       return await generateDetailPreviewFromBuffer(buffer, {
         region: options.region,
         transform: options.transform,
-        format: 'png',
-        quality: 95,
+        resize: options.resize as ResizeSettings | undefined,
+        format: options.format || 'jpeg',
+        quality: options.quality ?? 90,
       });
     }
   );
