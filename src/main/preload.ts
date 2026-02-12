@@ -41,6 +41,18 @@ export interface ImportWithMetadataResult {
   metadataFailures: { path: string; reason: string }[];
 }
 
+/** Persisted settings (interface matches shared/settings.ts) */
+export interface PersistedSettings {
+  version: number;
+  outputFormat: string;
+  resize: unknown;
+  quality: {
+    jpg: number;
+    webp: number;
+    heic: number;
+  };
+}
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('reformat', {
   // Test ping
@@ -67,5 +79,25 @@ contextBridge.exposeInMainWorld('reformat', {
     existingPaths: string[] = []
   ): Promise<ImportWithMetadataResult> => {
     return await ipcRenderer.invoke('importWithMetadata', droppedPaths, existingPaths);
+  },
+
+  // Load settings from disk
+  loadSettings: async (): Promise<PersistedSettings> => {
+    return await ipcRenderer.invoke('loadSettings');
+  },
+
+  // Save settings to disk
+  saveSettings: async (settings: PersistedSettings): Promise<void> => {
+    return await ipcRenderer.invoke('saveSettings', settings);
+  },
+
+  // Update settings (partial update)
+  updateSettings: async (partial: Partial<PersistedSettings>): Promise<PersistedSettings> => {
+    return await ipcRenderer.invoke('updateSettings', partial);
+  },
+
+  // Reset settings to defaults
+  resetSettings: async (): Promise<PersistedSettings> => {
+    return await ipcRenderer.invoke('resetSettings');
   },
 });

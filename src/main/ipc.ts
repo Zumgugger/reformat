@@ -1,7 +1,14 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import { selectFiles, importDroppedPaths, ImportDroppedResult, SelectFilesResult } from './import';
 import { createImageItems } from './metadata';
+import {
+  loadSettings,
+  saveSettings,
+  updateSettings,
+  resetSettings,
+} from './settingsStore';
 import type { ImageItem } from '../shared/types';
+import type { PersistedSettings } from '../shared/settings';
 
 /** Result of full import with metadata extraction */
 export interface ImportWithMetadataResult {
@@ -57,4 +64,30 @@ export function registerIpcHandlers(): void {
       };
     }
   );
+
+  // Load settings from disk
+  ipcMain.handle('loadSettings', async (): Promise<PersistedSettings> => {
+    return await loadSettings();
+  });
+
+  // Save settings to disk
+  ipcMain.handle(
+    'saveSettings',
+    async (_event, settings: PersistedSettings): Promise<void> => {
+      await saveSettings(settings);
+    }
+  );
+
+  // Update settings (partial update)
+  ipcMain.handle(
+    'updateSettings',
+    async (_event, partial: Partial<PersistedSettings>): Promise<PersistedSettings> => {
+      return await updateSettings(partial);
+    }
+  );
+
+  // Reset settings to defaults
+  ipcMain.handle('resetSettings', async (): Promise<PersistedSettings> => {
+    return await resetSettings();
+  });
 }

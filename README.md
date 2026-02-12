@@ -50,12 +50,15 @@ src/
   main/          # Electron main process (Node.js)
     import.ts    # File/folder import with validation
     metadata.ts  # Image metadata extraction (sharp)
+    settingsStore.ts  # Settings persistence
     ipc.ts       # IPC handlers
   renderer/      # UI (HTML/CSS/TypeScript)
-    store.ts     # Reactive state management
+    store.ts     # Reactive state management (images)
+    settingsStore.ts  # Settings state management
     types.ts     # Renderer type definitions
   shared/        # Shared types and utilities
     types.ts     # Domain types (ImageItem, Transform, etc.)
+    settings.ts  # Settings schema, validation, migrations
     bytes.ts     # MiB conversions and formatting
     paths.ts     # Output folder rules
     naming.ts    # Output naming and collision handling
@@ -117,9 +120,10 @@ git push origin main
 
 ## Known Limitations
 
-V1 is currently in Phase C (import pipeline complete).
+V1 is currently in Phase D (settings persistence complete).
 - Animated GIF/WebP files are rejected
 - Import is non-recursive (subfolders are skipped)
+- Settings are saved to user data directory on change
 
 ## License
 

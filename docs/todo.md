@@ -225,29 +225,59 @@ Goal: main imports paths and returns metadata-ready descriptors; renderer shows 
 Goal: settings persist across launches and can be edited when idle.
 
 ### D1. Settings schema + defaults (tests first)
-- [ ] Define persisted settings schema (versioned) in `src/shared/settings.ts`
-- [ ] Implement validation + defaulting + migration stubs (v0 → v1 if needed)
-- [ ] Unit tests for validation/defaulting/migrations
+- [x] Define persisted settings schema (versioned) in `src/shared/settings.ts`
+- [x] Implement validation + defaulting + migration stubs (v0 → v1 if needed)
+- [x] Unit tests for validation/defaulting/migrations
 
 ### D2. Main: load/save settings
-- [ ] Implement load/save using `app.getPath('userData')` JSON file
-- [ ] Ensure save is robust (atomic write strategy if needed)
-- [ ] Test main settings load/save with temp `userData` override if feasible
+- [x] Implement load/save using `app.getPath('userData')` JSON file
+- [x] Ensure save is robust (atomic write strategy if needed)
+- [x] Test main settings load/save with temp `userData` override if feasible
 
 ### D3. Renderer: settings store + UI
-- [ ] Add settings panel UI controls:
+- [x] Add settings panel UI controls:
 	- output format dropdown (includes “Same as input”)
 	- resize mode selector (default Pixels)
 	- pixels mode: keep ratio toggle + driving dimension + maxSide option
 	- quality slider (40..100, default 85) visible only when applicable
-- [ ] Add “locked” UI flag in store (prepping for run lock)
-- [ ] Unit tests: when locked, edits disabled/no-op
+- [x] Add "locked" UI flag in store (prepping for run lock)
+- [x] Unit tests: when locked, edits disabled/no-op
 
 ### Acceptance
-- [ ] Relaunch preserves output format + resize settings
+- [x] Relaunch preserves output format + resize settings
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
+
+### Phase D Notes (2026-02-12)
+- Implemented `src/shared/settings.ts` with 56 unit tests:
+  - Versioned settings schema (v1)
+  - Validation + defaulting for all settings fields
+  - Migration support (v0 → v1)
+  - Utility functions: `cloneSettings()`, `settingsEqual()`
+- Implemented `src/main/settingsStore.ts` with 24 integration tests:
+  - Load/save to JSON file in userData directory
+  - Atomic write strategy (temp file + rename)
+  - Caching for performance
+  - Custom userData path for testing
+- Implemented `src/renderer/settingsStore.ts` with 58 unit tests:
+  - Reactive store with event subscription
+  - Locked state prevents modifications during runs
+  - Dirty tracking for unsaved changes
+  - IPC integration with main process
+- Added settings panel UI in `src/renderer/index.html`:
+  - Two-panel layout (image list + settings)
+  - Output format dropdown
+  - Resize mode selector (pixels/percent/targetMiB)
+  - Quality slider (40-100)
+  - Locked indicator during processing
+- Added IPC handlers for settings in `src/main/ipc.ts`
+- Updated preload script with settings API
+- Total: 386 passing tests (138 new tests)
 
 ---
 
@@ -298,7 +328,11 @@ Goal: click Convert/Export runs processing for all items with concurrency 4.
 - [ ] Batch runs 4 at a time, skips failures, shows summary count
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -321,7 +355,11 @@ Goal: cancel stops remaining work and keeps already-exported files.
 - [ ] Renderer store tests for cancel flow + status transitions
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -344,7 +382,11 @@ Goal: preview shows active image; rotate/flip stored per item and used in export
 - [ ] Store tests: transforms apply to correct item
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -368,7 +410,11 @@ Goal: user crops in preview; export respects crop.
 - [ ] Integration test with synthetic quadrant-color image to validate crop region
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -394,7 +440,11 @@ Goal: when crop enabled with multiple files, enforce one-by-one crop & export; n
 - [ ] Store tests: queue advancement + cancellation + ordering
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -413,7 +463,11 @@ Goal: show 1:1 pixel region controlled by a draggable lens.
 - [ ] Unit tests for lens coordinate conversions (screen → normalized → pixel crop)
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -440,7 +494,11 @@ Goal: target size via iterative downscale within ±10% tolerance, min 48×48; sh
 - [ ] Show per-file estimated output MiB in bottom list
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -463,7 +521,11 @@ Goal: Ctrl+V/Cmd+V imports clipboard image; replace when idle, append when runni
 - [ ] Store tests: replace vs append behavior
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -486,7 +548,11 @@ Goal: drag exported files out of app; best-effort move semantics; collision prom
 - [ ] Manual smoke test drag-out on Windows/macOS
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -506,7 +572,11 @@ Goal: block outbound network, disable navigation/new windows, ensure temp cleanu
 - [ ] Ensure temp files (if any) are deleted promptly and on shutdown
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
 ---
 
@@ -529,5 +599,9 @@ Goal: ship installers, bundle sharp correctly, show About info.
 - [ ] Smoke test: app runs offline, imports, exports to Downloads
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (386/386 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
 
