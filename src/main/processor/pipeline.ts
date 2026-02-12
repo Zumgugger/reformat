@@ -11,6 +11,7 @@ import type {
   Transform,
   Crop,
 } from '../../shared/types';
+import { normalizedToPixelCrop, isCropActive } from '../../shared/crop';
 
 /** Options for processing a single image */
 export interface ProcessOptions {
@@ -277,6 +278,7 @@ export function applyTransform(
 
 /**
  * Apply crop to a sharp instance using normalized coordinates.
+ * Uses the shared crop utilities for proper coordinate conversion.
  */
 export function applyCrop(
   image: sharp.Sharp,
@@ -284,24 +286,19 @@ export function applyCrop(
   width: number,
   height: number
 ): sharp.Sharp {
-  if (!crop || !crop.active) return image;
+  if (!crop || !isCropActive(crop)) return image;
   
-  const { rect } = crop;
-  
-  // Convert normalized coordinates to pixels
-  const left = Math.round(rect.x * width);
-  const top = Math.round(rect.y * height);
-  const cropWidth = Math.round(rect.width * width);
-  const cropHeight = Math.round(rect.height * height);
+  // Use shared utility to convert normalized coords to pixels
+  const pixelCrop = normalizedToPixelCrop(crop.rect, width, height);
   
   // Ensure valid dimensions
-  if (cropWidth <= 0 || cropHeight <= 0) return image;
+  if (pixelCrop.width <= 0 || pixelCrop.height <= 0) return image;
   
   return image.extract({
-    left: Math.max(0, left),
-    top: Math.max(0, top),
-    width: Math.min(cropWidth, width - left),
-    height: Math.min(cropHeight, height - top),
+    left: pixelCrop.left,
+    top: pixelCrop.top,
+    width: pixelCrop.width,
+    height: pixelCrop.height,
   });
 }
 
@@ -324,23 +321,27 @@ export async function processImage(options: ProcessOptions): Promise<ProcessResu
     const sourceHeight = options.sourceHeight ?? metadata.height ?? 0;
     const sourceFormat = options.sourceFormat ?? metadata.format;
     
-    // Apply crop (if active) - needs to happen before resize
+    // Track current dimensions as we apply operations
     let currentWidth = sourceWidth;
     let currentHeight = sourceHeight;
     
-    if (options.crop?.active) {
-      image = applyCrop(image, options.crop, sourceWidth, sourceHeight);
-      // Update dimensions after crop
-      currentWidth = Math.round(options.crop.rect.width * sourceWidth);
-      currentHeight = Math.round(options.crop.rect.height * sourceHeight);
-    }
-    
-    // Apply transform (rotate/flip)
+    // Apply transform (rotate/flip) FIRST
+    // This must come before crop so crop coordinates match what user sees
     image = applyTransform(image, options.transform);
     
     // Update dimensions if rotated 90 or 270 degrees
     if (options.transform?.rotateSteps === 1 || options.transform?.rotateSteps === 3) {
       [currentWidth, currentHeight] = [currentHeight, currentWidth];
+    }
+    
+    // Apply crop (if active) - happens AFTER transform
+    // Coordinates are relative to the transformed view (what user sees)
+    if (isCropActive(options.crop)) {
+      image = applyCrop(image, options.crop, currentWidth, currentHeight);
+      // Update dimensions after crop
+      const pixelCrop = normalizedToPixelCrop(options.crop!.rect, currentWidth, currentHeight);
+      currentWidth = pixelCrop.width;
+      currentHeight = pixelCrop.height;
     }
     
     // Calculate target dimensions

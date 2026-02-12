@@ -150,7 +150,7 @@ export function generateRunId(): string {
 /**
  * Create a cancellation token for a run.
  */
-export { createCancellationToken };
+export { createCancellationToken, type CancellationToken };
 
 /**
  * Export a batch of images.

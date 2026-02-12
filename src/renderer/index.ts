@@ -6,7 +6,7 @@
 import './types'; // Import types to extend Window interface
 import { store, formatItemInfo } from './store';
 import { settingsStore } from './settingsStore';
-import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult, Transform } from './types';
+import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult, Transform, Crop, CropRatioPreset, CropRect } from './types';
 import { DEFAULT_TRANSFORM, DEFAULT_CROP } from './types';
 import {
   rotateTransformCW,
@@ -18,6 +18,13 @@ import {
   getTransformedDimensions,
   transformToCSS,
 } from '../shared/transform';
+import {
+  getAspectRatioForPreset,
+  createCenteredCropRect,
+  isCropActive,
+  cloneCrop,
+  CROP_RATIO_PRESETS,
+} from '../shared/crop';
 
 // DOM Elements
 const dropZone = document.getElementById('drop-zone') as HTMLDivElement;
@@ -56,6 +63,7 @@ const settingsLocked = document.getElementById('settings-locked') as HTMLDivElem
 const previewPanel = document.getElementById('preview-panel') as HTMLDivElement;
 const previewContainer = document.getElementById('preview-container') as HTMLDivElement;
 const previewPlaceholder = document.getElementById('preview-placeholder') as HTMLDivElement;
+const previewWrapper = document.getElementById('preview-wrapper') as HTMLDivElement;
 const previewImage = document.getElementById('preview-image') as HTMLImageElement;
 const previewInfo = document.getElementById('preview-info') as HTMLSpanElement;
 const previewMetadata = document.getElementById('preview-metadata') as HTMLDivElement;
@@ -64,6 +72,16 @@ const rotateCCWBtn = document.getElementById('rotate-ccw-btn') as HTMLButtonElem
 const flipHBtn = document.getElementById('flip-h-btn') as HTMLButtonElement;
 const flipVBtn = document.getElementById('flip-v-btn') as HTMLButtonElement;
 const resetTransformBtn = document.getElementById('reset-transform-btn') as HTMLButtonElement;
+
+// Crop DOM Elements
+const cropEnabledCheckbox = document.getElementById('crop-enabled') as HTMLInputElement;
+const cropRatioSelect = document.getElementById('crop-ratio') as HTMLSelectElement;
+const cropOverlay = document.getElementById('crop-overlay') as HTMLDivElement;
+const cropSelection = document.getElementById('crop-selection') as HTMLDivElement;
+const cropShadeTop = cropOverlay?.querySelector('.crop-shade-top') as HTMLDivElement;
+const cropShadeBottom = cropOverlay?.querySelector('.crop-shade-bottom') as HTMLDivElement;
+const cropShadeLeft = cropOverlay?.querySelector('.crop-shade-left') as HTMLDivElement;
+const cropShadeRight = cropOverlay?.querySelector('.crop-shade-right') as HTMLDivElement;
 
 // Export state
 let isRunning = false;
@@ -74,7 +92,17 @@ const itemStatusMap = new Map<string, string>(); // itemId -> status
 // Preview state
 let selectedItemId: string | null = null;
 const itemTransforms = new Map<string, Transform>(); // itemId -> transform
+const itemCrops = new Map<string, Crop>(); // itemId -> crop
 let isLoadingPreview = false;
+
+// Crop drag state
+let isCropDragging = false;
+let cropDragMode: 'move' | 'resize' = 'move';
+let cropDragHandle: string | null = null;
+let cropDragStartX = 0;
+let cropDragStartY = 0;
+let cropDragStartRect: CropRect | null = null;
+let previewImageRect: DOMRect | null = null;
 
 /**
  * Get or create transform for an item.
@@ -93,6 +121,34 @@ function getItemTransform(itemId: string): Transform {
  */
 function setItemTransform(itemId: string, transform: Transform): void {
   itemTransforms.set(itemId, transform);
+}
+
+/**
+ * Get or create crop for an item.
+ */
+function getItemCrop(itemId: string): Crop {
+  let crop = itemCrops.get(itemId);
+  if (!crop) {
+    crop = { ...DEFAULT_CROP, rect: { ...DEFAULT_CROP.rect } };
+    itemCrops.set(itemId, crop);
+  }
+  return crop;
+}
+
+/**
+ * Set crop for an item.
+ */
+function setItemCrop(itemId: string, crop: Crop): void {
+  itemCrops.set(itemId, cloneCrop(crop));
+}
+
+/**
+ * Get current selected item.
+ */
+function getSelectedItem(): ImageItem | null {
+  if (!selectedItemId) return null;
+  const state = store.getState();
+  return state.items.find((i) => i.id === selectedItemId) || null;
 }
 
 /**
@@ -160,7 +216,7 @@ async function loadPreview(): Promise<void> {
 
     // Display preview
     previewImage.src = result.dataUrl;
-    previewImage.classList.remove('hidden');
+    previewWrapper.classList.remove('hidden');
     previewPlaceholder.classList.add('hidden');
 
     // Update info
@@ -169,6 +225,11 @@ async function loadPreview(): Promise<void> {
 
     // Update metadata
     renderPreviewMetadata(item, transform);
+
+    // Update crop overlay after image loads
+    previewImage.onload = () => {
+      updateCropOverlay();
+    };
   } catch (error) {
     console.error('Failed to load preview:', error);
     showPreviewPlaceholder('Failed to load preview');
@@ -182,7 +243,7 @@ async function loadPreview(): Promise<void> {
  * Show preview placeholder.
  */
 function showPreviewPlaceholder(message = 'Select an image to preview'): void {
-  previewImage.classList.add('hidden');
+  previewWrapper.classList.add('hidden');
   previewPlaceholder.classList.remove('hidden');
   const textEl = previewPlaceholder.querySelector('.preview-placeholder-text');
   if (textEl) {
@@ -190,6 +251,7 @@ function showPreviewPlaceholder(message = 'Select an image to preview'): void {
   }
   previewInfo.textContent = '';
   previewMetadata.innerHTML = '';
+  hideCropOverlay();
 }
 
 /**
@@ -222,7 +284,272 @@ function renderPreviewMetadata(item: ImageItem, transform: Transform): void {
     parts.push(`<span><span class="label">Transform:</span> <span class="value">${transformParts.join(', ')}</span></span>`);
   }
 
+  // Crop info
+  const item_ = getSelectedItem();
+  if (item_) {
+    const crop = getItemCrop(item_.id);
+    if (isCropActive(crop)) {
+      const cropDims = {
+        width: Math.round(dims.width * crop.rect.width),
+        height: Math.round(dims.height * crop.rect.height),
+      };
+      parts.push(`<span><span class="label">Crop:</span> <span class="value">${cropDims.width} × ${cropDims.height}</span></span>`);
+    }
+  }
+
   previewMetadata.innerHTML = parts.join('');
+}
+
+/**
+ * Hide crop overlay.
+ */
+function hideCropOverlay(): void {
+  if (cropOverlay) {
+    cropOverlay.classList.add('hidden');
+    cropOverlay.classList.remove('active');
+  }
+}
+
+/**
+ * Show crop overlay.
+ */
+function showCropOverlay(): void {
+  if (cropOverlay) {
+    cropOverlay.classList.remove('hidden');
+    cropOverlay.classList.add('active');
+  }
+}
+
+/**
+ * Update crop overlay position based on current crop rect.
+ */
+function updateCropOverlay(): void {
+  const item = getSelectedItem();
+  if (!item || !cropOverlay || !cropSelection) return;
+
+  const crop = getItemCrop(item.id);
+  
+  // Update UI controls to match crop state
+  if (cropEnabledCheckbox) {
+    cropEnabledCheckbox.checked = crop.active;
+  }
+  if (cropRatioSelect) {
+    cropRatioSelect.value = crop.ratioPreset;
+    cropRatioSelect.disabled = !crop.active;
+  }
+
+  if (!crop.active) {
+    hideCropOverlay();
+    return;
+  }
+
+  showCropOverlay();
+
+  // Get the actual displayed image dimensions
+  const imageRect = previewImage.getBoundingClientRect();
+  previewImageRect = imageRect;
+  
+  // Calculate crop selection position in pixels
+  const rect = crop.rect;
+  const left = rect.x * imageRect.width;
+  const top = rect.y * imageRect.height;
+  const width = rect.width * imageRect.width;
+  const height = rect.height * imageRect.height;
+
+  // Position crop selection
+  cropSelection.style.left = `${left}px`;
+  cropSelection.style.top = `${top}px`;
+  cropSelection.style.width = `${width}px`;
+  cropSelection.style.height = `${height}px`;
+
+  // Position shade regions
+  if (cropShadeTop) {
+    cropShadeTop.style.height = `${top}px`;
+  }
+  if (cropShadeBottom) {
+    cropShadeBottom.style.top = `${top + height}px`;
+    cropShadeBottom.style.height = `${imageRect.height - top - height}px`;
+  }
+  if (cropShadeLeft) {
+    cropShadeLeft.style.top = `${top}px`;
+    cropShadeLeft.style.width = `${left}px`;
+    cropShadeLeft.style.height = `${height}px`;
+  }
+  if (cropShadeRight) {
+    cropShadeRight.style.top = `${top}px`;
+    cropShadeRight.style.left = `${left + width}px`;
+    cropShadeRight.style.width = `${imageRect.width - left - width}px`;
+    cropShadeRight.style.height = `${height}px`;
+  }
+
+  // Update metadata display
+  const transform = getItemTransform(item.id);
+  renderPreviewMetadata(item, transform);
+}
+
+/**
+ * Initialize crop to centered rect with current ratio preset.
+ */
+function initializeCropForItem(itemId: string): void {
+  const item = store.getState().items.find((i) => i.id === itemId);
+  if (!item) return;
+
+  const crop = getItemCrop(itemId);
+  const transform = getItemTransform(itemId);
+  const dims = getTransformedDimensions(item.width, item.height, transform);
+  
+  const aspectRatio = getAspectRatioForPreset(crop.ratioPreset, dims.width, dims.height);
+  const rect = createCenteredCropRect(aspectRatio, dims.width, dims.height);
+  
+  crop.rect = rect;
+  setItemCrop(itemId, crop);
+  updateCropOverlay();
+}
+
+/**
+ * Handle crop enable/disable toggle.
+ */
+function handleCropToggle(): void {
+  const item = getSelectedItem();
+  if (!item || isRunning) return;
+
+  const crop = getItemCrop(item.id);
+  crop.active = cropEnabledCheckbox.checked;
+  
+  if (crop.active) {
+    // Initialize crop rect when enabling
+    initializeCropForItem(item.id);
+  }
+  
+  setItemCrop(item.id, crop);
+  updateCropOverlay();
+}
+
+/**
+ * Handle crop ratio preset change.
+ */
+function handleCropRatioChange(): void {
+  const item = getSelectedItem();
+  if (!item || isRunning) return;
+
+  const crop = getItemCrop(item.id);
+  crop.ratioPreset = cropRatioSelect.value as CropRatioPreset;
+  
+  // Recalculate crop rect for new ratio
+  const transform = getItemTransform(item.id);
+  const dims = getTransformedDimensions(item.width, item.height, transform);
+  const aspectRatio = getAspectRatioForPreset(crop.ratioPreset, dims.width, dims.height);
+  crop.rect = createCenteredCropRect(aspectRatio, dims.width, dims.height);
+  
+  setItemCrop(item.id, crop);
+  updateCropOverlay();
+}
+
+/**
+ * Handle crop drag start.
+ */
+function handleCropDragStart(e: MouseEvent): void {
+  if (!selectedItemId || isRunning) return;
+  
+  const target = e.target as HTMLElement;
+  const handle = target.dataset.handle;
+  
+  isCropDragging = true;
+  cropDragStartX = e.clientX;
+  cropDragStartY = e.clientY;
+  
+  const crop = getItemCrop(selectedItemId);
+  cropDragStartRect = { ...crop.rect };
+  
+  if (handle) {
+    cropDragMode = 'resize';
+    cropDragHandle = handle;
+  } else {
+    cropDragMode = 'move';
+    cropDragHandle = null;
+  }
+  
+  e.preventDefault();
+}
+
+/**
+ * Handle crop drag move.
+ */
+function handleCropDragMove(e: MouseEvent): void {
+  if (!isCropDragging || !selectedItemId || !cropDragStartRect || !previewImageRect) return;
+  
+  const item = getSelectedItem();
+  if (!item) return;
+  
+  const crop = getItemCrop(selectedItemId);
+  const rect = { ...cropDragStartRect };
+  
+  // Calculate delta in normalized coordinates
+  const deltaX = (e.clientX - cropDragStartX) / previewImageRect.width;
+  const deltaY = (e.clientY - cropDragStartY) / previewImageRect.height;
+  
+  if (cropDragMode === 'move') {
+    // Move the entire crop area
+    rect.x = Math.max(0, Math.min(1 - rect.width, cropDragStartRect.x + deltaX));
+    rect.y = Math.max(0, Math.min(1 - rect.height, cropDragStartRect.y + deltaY));
+  } else if (cropDragMode === 'resize' && cropDragHandle) {
+    // Resize based on handle
+    const transform = getItemTransform(selectedItemId);
+    const dims = getTransformedDimensions(item.width, item.height, transform);
+    const aspectRatio = getAspectRatioForPreset(crop.ratioPreset, dims.width, dims.height);
+    
+    // Calculate new bounds based on handle
+    let newLeft = cropDragStartRect.x;
+    let newTop = cropDragStartRect.y;
+    let newRight = cropDragStartRect.x + cropDragStartRect.width;
+    let newBottom = cropDragStartRect.y + cropDragStartRect.height;
+    
+    // Adjust based on handle being dragged
+    if (cropDragHandle.includes('w')) {
+      newLeft = Math.max(0, Math.min(newRight - 0.05, cropDragStartRect.x + deltaX));
+    }
+    if (cropDragHandle.includes('e')) {
+      newRight = Math.max(newLeft + 0.05, Math.min(1, cropDragStartRect.x + cropDragStartRect.width + deltaX));
+    }
+    if (cropDragHandle.includes('n')) {
+      newTop = Math.max(0, Math.min(newBottom - 0.05, cropDragStartRect.y + deltaY));
+    }
+    if (cropDragHandle.includes('s')) {
+      newBottom = Math.max(newTop + 0.05, Math.min(1, cropDragStartRect.y + cropDragStartRect.height + deltaY));
+    }
+    
+    rect.x = newLeft;
+    rect.y = newTop;
+    rect.width = newRight - newLeft;
+    rect.height = newBottom - newTop;
+    
+    // Enforce aspect ratio if not free
+    if (aspectRatio !== null && crop.ratioPreset !== 'free') {
+      const imageRatio = dims.width / dims.height;
+      const currentRatio = (rect.width * dims.width) / (rect.height * dims.height);
+      
+      if (currentRatio > aspectRatio) {
+        // Too wide - shrink width
+        rect.width = (aspectRatio / imageRatio) * rect.height;
+      } else {
+        // Too tall - shrink height
+        rect.height = (imageRatio / aspectRatio) * rect.width;
+      }
+    }
+  }
+  
+  crop.rect = rect;
+  setItemCrop(selectedItemId, crop);
+  updateCropOverlay();
+}
+
+/**
+ * Handle crop drag end.
+ */
+function handleCropDragEnd(): void {
+  isCropDragging = false;
+  cropDragHandle = null;
+  cropDragStartRect = null;
 }
 
 /**
@@ -300,7 +627,7 @@ function buildRunConfig(items: ImageItem[]): RunConfig {
     items: items.map((item) => ({
       itemId: item.id,
       transform: getItemTransform(item.id),
-      crop: DEFAULT_CROP,
+      crop: getItemCrop(item.id),
     })),
   };
 }
@@ -981,6 +1308,33 @@ async function init(): Promise<void> {
   if (flipHBtn) flipHBtn.addEventListener('click', handleFlipH);
   if (flipVBtn) flipVBtn.addEventListener('click', handleFlipV);
   if (resetTransformBtn) resetTransformBtn.addEventListener('click', handleResetTransform);
+
+  // Crop controls
+  if (cropEnabledCheckbox) {
+    cropEnabledCheckbox.addEventListener('change', handleCropToggle);
+  }
+  if (cropRatioSelect) {
+    cropRatioSelect.addEventListener('change', handleCropRatioChange);
+  }
+
+  // Crop overlay drag handlers
+  if (cropSelection) {
+    cropSelection.addEventListener('mousedown', handleCropDragStart);
+  }
+  document.addEventListener('mousemove', handleCropDragMove);
+  document.addEventListener('mouseup', handleCropDragEnd);
+
+  // Crop handle drag handlers
+  const cropHandles = document.querySelectorAll('.crop-handle');
+  cropHandles.forEach((handle) => {
+    handle.addEventListener('mousedown', (e) => {
+      const handleEl = e.target as HTMLElement;
+      const handleType = handleEl.dataset.handle;
+      if (handleType) {
+        handleCropDragStart(e as MouseEvent, handleType);
+      }
+    });
+  });
 
   // Initialize preview state
   setTransformButtonsEnabled(false);

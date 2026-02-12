@@ -476,27 +476,46 @@ Goal: preview shows active image; rotate/flip stored per item and used in export
 Goal: user crops in preview; export respects crop.
 
 ### H1. Renderer: crop overlay
-- [ ] Add ratio preset dropdown: Original, Free, 1:1, 4:5, 3:4, 9:16, 16:9, 2:3, 3:2
-- [ ] Initialize centered crop matching selected ratio
-- [ ] Draw rule-of-thirds grid
-- [ ] Store crop rectangle in normalized coordinates (0..1)
+- [x] Add ratio preset dropdown: Original, Free, 1:1, 4:5, 3:4, 9:16, 16:9, 2:3, 3:2
+- [x] Initialize centered crop matching selected ratio
+- [x] Draw rule-of-thirds grid
+- [x] Store crop rectangle in normalized coordinates (0..1)
 
 ### H2. Crop conversion math (tests first)
-- [ ] Implement utilities to convert normalized crop → pixel crop
-- [ ] Account for current transform orientation when converting
-- [ ] Unit tests: bounds, ratio enforcement, orientation cases
+- [x] Implement utilities to convert normalized crop → pixel crop
+- [x] Account for current transform orientation when converting
+- [x] Unit tests: bounds, ratio enforcement, orientation cases (62 tests)
 
 ### H3. Main pipeline: apply crop
-- [ ] Apply crop before resize
-- [ ] Ensure keep-ratio enforcement uses post-crop ratio
-- [ ] Integration test with synthetic quadrant-color image to validate crop region
+- [x] Apply crop after transform (before resize)
+- [x] Ensure keep-ratio enforcement uses post-crop ratio
+- [x] Integration test with synthetic quadrant-color image to validate crop region (9 tests)
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (603/603 passing)
 - [x] Update README.md
-- [x] Commit to git
-- [x] Push to GitHub
+- [ ] Commit to git
+- [ ] Push to GitHub
+
+### Phase H Notes (2025-01-XX)
+- Created `src/shared/crop.ts` with comprehensive crop utilities:
+  - `getAspectRatioForPreset()` - convert ratio preset to numeric value
+  - `createCenteredCropRect()` - create centered crop with given aspect ratio
+  - `normalizedToPixelCrop()` - convert 0..1 coords to pixel coords
+  - `normalizedToPixelCropWithTransform()` - handle transform orientation
+  - `isCropActive()` - check if crop differs from full image
+  - `clampCropRect()` - clamp bounds to 0..1 range
+  - `adjustCropToRatio()` - enforce aspect ratio while preserving center
+- 62 unit tests for crop utilities covering:
+  - Aspect ratio calculations for all presets
+  - Centered crop creation with various ratios
+  - Pixel coordinate conversion
+  - Transform orientation handling
+  - Boundary clamping
+- Pipeline order: EXIF auto-rotate → transform → crop → resize → encode
+- 9 integration tests including quadrant-color image validation
+- Total test count: 603 passing tests
 
 ---
 

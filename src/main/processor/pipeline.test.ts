@@ -467,5 +467,307 @@ describe('pipeline', () => {
       expect(result.outputWidth).toBe(200);
       expect(result.outputHeight).toBe(200);
     });
+
+    it('should apply crop to center of image', async () => {
+      // Create a 400x400 image
+      const sourcePath = await createTestImage('crop-center.jpg', 400, 400, 'jpeg');
+      const outputPath = path.join(tempDir, 'cropped-center.jpg');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        crop: {
+          active: true,
+          ratioPreset: 'free',
+          rect: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 }, // Center 200x200
+        },
+        sourceWidth: 400,
+        sourceHeight: 400,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(200);
+      expect(result.outputHeight).toBe(200);
+    });
+
+    it('should apply crop with transform', async () => {
+      // Create a 400x200 landscape image
+      const sourcePath = await createTestImage('crop-transform.jpg', 400, 200, 'jpeg');
+      const outputPath = path.join(tempDir, 'cropped-transformed.jpg');
+
+      // Rotate 90° CW: original 400x200 becomes 200x400
+      // Then crop top half: should get 200x200
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        transform: { rotateSteps: 1, flipH: false, flipV: false },
+        crop: {
+          active: true,
+          ratioPreset: 'free',
+          rect: { x: 0, y: 0, width: 1, height: 0.5 }, // Top half
+        },
+        sourceWidth: 400,
+        sourceHeight: 200,
+      });
+
+      expect(result.success).toBe(true);
+      // After 90° rotation: 200x400, then crop top half: 200x200
+      expect(result.outputWidth).toBe(200);
+      expect(result.outputHeight).toBe(200);
+    });
+
+    it('should not crop when crop is inactive', async () => {
+      const sourcePath = await createTestImage('no-crop.jpg', 300, 300, 'jpeg');
+      const outputPath = path.join(tempDir, 'no-crop-output.jpg');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        crop: {
+          active: false, // Inactive - should not crop
+          ratioPreset: '1:1',
+          rect: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+        },
+        sourceWidth: 300,
+        sourceHeight: 300,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(300);
+      expect(result.outputHeight).toBe(300);
+    });
+
+    it('should not crop when crop rect is full image', async () => {
+      const sourcePath = await createTestImage('full-crop.jpg', 300, 300, 'jpeg');
+      const outputPath = path.join(tempDir, 'full-crop-output.jpg');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        crop: {
+          active: true,
+          ratioPreset: 'original',
+          rect: { x: 0, y: 0, width: 1, height: 1 }, // Full image
+        },
+        sourceWidth: 300,
+        sourceHeight: 300,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(300);
+      expect(result.outputHeight).toBe(300);
+    });
+
+    it('should apply crop then resize', async () => {
+      // Create 400x400, crop to 200x200 center, then resize to 100x100
+      const sourcePath = await createTestImage('crop-resize.jpg', 400, 400, 'jpeg');
+      const outputPath = path.join(tempDir, 'crop-resize-output.jpg');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'pixels', keepRatio: true, driving: 'maxSide', maxSide: 100 },
+        quality: DEFAULT_QUALITY,
+        crop: {
+          active: true,
+          ratioPreset: '1:1',
+          rect: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
+        },
+        sourceWidth: 400,
+        sourceHeight: 400,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(100);
+      expect(result.outputHeight).toBe(100);
+    });
+  });
+
+  describe('crop with quadrant colors', () => {
+    // Creates a 4-quadrant image for validating crop regions
+    async function createQuadrantImage(filename: string): Promise<string> {
+      const filePath = path.join(tempDir, filename);
+      const size = 100;
+      
+      // Create four 50x50 quadrant images with different colors
+      const topLeft = await sharp({
+        create: { width: 50, height: 50, channels: 3, background: { r: 255, g: 0, b: 0 } },
+      }).raw().toBuffer();
+      
+      const topRight = await sharp({
+        create: { width: 50, height: 50, channels: 3, background: { r: 0, g: 255, b: 0 } },
+      }).raw().toBuffer();
+      
+      const bottomLeft = await sharp({
+        create: { width: 50, height: 50, channels: 3, background: { r: 0, g: 0, b: 255 } },
+      }).raw().toBuffer();
+      
+      const bottomRight = await sharp({
+        create: { width: 50, height: 50, channels: 3, background: { r: 255, g: 255, b: 0 } },
+      }).raw().toBuffer();
+
+      // Compose the quadrants into a single image
+      const composite = await sharp({
+        create: { width: size, height: size, channels: 3, background: { r: 0, g: 0, b: 0 } },
+      })
+        .composite([
+          { input: topLeft, raw: { width: 50, height: 50, channels: 3 }, left: 0, top: 0 },
+          { input: topRight, raw: { width: 50, height: 50, channels: 3 }, left: 50, top: 0 },
+          { input: bottomLeft, raw: { width: 50, height: 50, channels: 3 }, left: 0, top: 50 },
+          { input: bottomRight, raw: { width: 50, height: 50, channels: 3 }, left: 50, top: 50 },
+        ])
+        .png()
+        .toFile(filePath);
+
+      return filePath;
+    }
+
+    // Helper to get the dominant color of an image
+    async function getDominantColor(imagePath: string): Promise<{ r: number; g: number; b: number }> {
+      const stats = await sharp(imagePath).stats();
+      // Get mean color from stats
+      return {
+        r: Math.round(stats.channels[0].mean),
+        g: Math.round(stats.channels[1].mean),
+        b: Math.round(stats.channels[2].mean),
+      };
+    }
+
+    it('should crop top-left quadrant (red)', async () => {
+      const sourcePath = await createQuadrantImage('quadrant-tl.png');
+      const outputPath = path.join(tempDir, 'quadrant-tl-cropped.png');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'png',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        crop: {
+          active: true,
+          ratioPreset: '1:1',
+          rect: { x: 0, y: 0, width: 0.5, height: 0.5 }, // Top-left quadrant
+        },
+        sourceWidth: 100,
+        sourceHeight: 100,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(50);
+      expect(result.outputHeight).toBe(50);
+
+      const color = await getDominantColor(outputPath);
+      // Should be mostly red
+      expect(color.r).toBeGreaterThan(200);
+      expect(color.g).toBeLessThan(50);
+      expect(color.b).toBeLessThan(50);
+    });
+
+    it('should crop bottom-right quadrant (yellow)', async () => {
+      const sourcePath = await createQuadrantImage('quadrant-br.png');
+      const outputPath = path.join(tempDir, 'quadrant-br-cropped.png');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'png',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        crop: {
+          active: true,
+          ratioPreset: '1:1',
+          rect: { x: 0.5, y: 0.5, width: 0.5, height: 0.5 }, // Bottom-right quadrant
+        },
+        sourceWidth: 100,
+        sourceHeight: 100,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(50);
+      expect(result.outputHeight).toBe(50);
+
+      const color = await getDominantColor(outputPath);
+      // Should be mostly yellow (red + green)
+      expect(color.r).toBeGreaterThan(200);
+      expect(color.g).toBeGreaterThan(200);
+      expect(color.b).toBeLessThan(50);
+    });
+
+    it('should crop top-right after 90° rotation (becomes top-left of rotated view)', async () => {
+      // Original: TL=red, TR=green, BL=blue, BR=yellow
+      // After 90° CW: TL=blue, TR=red, BL=yellow, BR=green
+      const sourcePath = await createQuadrantImage('quadrant-rotated.png');
+      const outputPath = path.join(tempDir, 'quadrant-rotated-cropped.png');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'png',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        transform: { rotateSteps: 1, flipH: false, flipV: false },
+        crop: {
+          active: true,
+          ratioPreset: '1:1',
+          rect: { x: 0, y: 0, width: 0.5, height: 0.5 }, // Top-left of rotated view
+        },
+        sourceWidth: 100,
+        sourceHeight: 100,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(50);
+      expect(result.outputHeight).toBe(50);
+
+      const color = await getDominantColor(outputPath);
+      // After 90° CW rotation, the original bottom-left (blue) becomes top-left
+      expect(color.r).toBeLessThan(50);
+      expect(color.g).toBeLessThan(50);
+      expect(color.b).toBeGreaterThan(200);
+    });
+
+    it('should crop center region (mix of all colors)', async () => {
+      const sourcePath = await createQuadrantImage('quadrant-center.png');
+      const outputPath = path.join(tempDir, 'quadrant-center-cropped.png');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'png',
+        resize: { mode: 'percent', percent: 100 },
+        quality: DEFAULT_QUALITY,
+        crop: {
+          active: true,
+          ratioPreset: '1:1',
+          rect: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 }, // Center region
+        },
+        sourceWidth: 100,
+        sourceHeight: 100,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputWidth).toBe(50);
+      expect(result.outputHeight).toBe(50);
+
+      const color = await getDominantColor(outputPath);
+      // Center should be a mix of all colors (grayish/brownish)
+      // All channels should have some contribution
+      expect(color.r).toBeGreaterThan(50);
+      expect(color.g).toBeGreaterThan(50);
+      expect(color.b).toBeGreaterThan(50);
+    });
   });
 });

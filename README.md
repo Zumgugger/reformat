@@ -15,6 +15,8 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - **Image preview with selection**
 - **Rotate (90° CW/CCW) and flip (horizontal/vertical) transformations**
 - **Per-image transform state preserved during export**
+- **Crop with ratio presets (Free, 1:1, 4:5, 3:4, 9:16, 16:9, 2:3, 3:2)**
+- **Draggable crop overlay with rule-of-thirds grid**
 
 ## Development Setup
 
@@ -74,6 +76,7 @@ src/
     paths.ts     # Output folder rules
     naming.ts    # Output naming and collision handling
     transform.ts # Transform utilities (rotate/flip)
+    crop.ts      # Crop utilities (ratio presets, coordinate conversion)
     supportedFormats.ts  # Format validation
     dedupe.ts    # Path deduplication
 docs/
@@ -132,12 +135,12 @@ git push origin main
 
 ## Known Limitations
 
-V1 is currently in Phase G (preview and transform functionality complete).
+V1 is currently in Phase H (crop UI and pipeline complete).
 - Animated GIF/WebP files are rejected
 - Import is non-recursive (subfolders are skipped)
 - Settings are saved to user data directory on change
-- Crop functionality not yet implemented (planned for Phase H)
-- 532 tests passing
+- Batch crop workflow not yet implemented (planned for Phase I)
+- 603 tests passing
 
 ## License
 

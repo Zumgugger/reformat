@@ -63,7 +63,36 @@
             <div id="preview-placeholder" class="preview-placeholder">
               <span class="preview-placeholder-text">Select an image to preview</span>
             </div>
-            <img id="preview-image" class="preview-image hidden" alt="Preview" />
+            <div id="preview-wrapper" class="preview-wrapper hidden">
+              <img id="preview-image" class="preview-image" alt="Preview" />
+              <!-- Crop overlay -->
+              <div id="crop-overlay" class="crop-overlay hidden">
+                <!-- Darkened regions outside crop area -->
+                <div class="crop-shade crop-shade-top"></div>
+                <div class="crop-shade crop-shade-bottom"></div>
+                <div class="crop-shade crop-shade-left"></div>
+                <div class="crop-shade crop-shade-right"></div>
+                <!-- Crop selection area -->
+                <div id="crop-selection" class="crop-selection">
+                  <!-- Rule of thirds grid -->
+                  <div class="crop-grid">
+                    <div class="crop-grid-line crop-grid-h1"></div>
+                    <div class="crop-grid-line crop-grid-h2"></div>
+                    <div class="crop-grid-line crop-grid-v1"></div>
+                    <div class="crop-grid-line crop-grid-v2"></div>
+                  </div>
+                  <!-- Resize handles -->
+                  <div class="crop-handle crop-handle-nw" data-handle="nw"></div>
+                  <div class="crop-handle crop-handle-n" data-handle="n"></div>
+                  <div class="crop-handle crop-handle-ne" data-handle="ne"></div>
+                  <div class="crop-handle crop-handle-w" data-handle="w"></div>
+                  <div class="crop-handle crop-handle-e" data-handle="e"></div>
+                  <div class="crop-handle crop-handle-sw" data-handle="sw"></div>
+                  <div class="crop-handle crop-handle-s" data-handle="s"></div>
+                  <div class="crop-handle crop-handle-se" data-handle="se"></div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="transform-controls">
             <button id="rotate-ccw-btn" class="btn btn-icon" title="Rotate counter-clockwise (90°)">↺</button>
@@ -71,6 +100,24 @@
             <button id="flip-h-btn" class="btn btn-icon" title="Flip horizontal">⇆</button>
             <button id="flip-v-btn" class="btn btn-icon" title="Flip vertical">⇅</button>
             <button id="reset-transform-btn" class="btn btn-small" title="Reset transformations">Reset</button>
+          </div>
+          <!-- Crop controls -->
+          <div class="crop-controls">
+            <label class="crop-toggle">
+              <input type="checkbox" id="crop-enabled" />
+              <span>Crop</span>
+            </label>
+            <select id="crop-ratio" class="setting-select-small" disabled>
+              <option value="original">Original</option>
+              <option value="free">Free</option>
+              <option value="1:1">1:1 (Square)</option>
+              <option value="4:5">4:5 (Portrait)</option>
+              <option value="3:4">3:4 (Portrait)</option>
+              <option value="9:16">9:16 (Portrait)</option>
+              <option value="16:9">16:9 (Landscape)</option>
+              <option value="2:3">2:3 (Portrait)</option>
+              <option value="3:2">3:2 (Landscape)</option>
+            </select>
           </div>
           <div id="preview-metadata" class="preview-metadata"></div>
         </div>

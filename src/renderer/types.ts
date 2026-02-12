@@ -15,6 +15,8 @@ export type {
   DrivingDimension,
   Transform,
   Crop,
+  CropRect,
+  CropRatioPreset,
   ItemRunConfig,
   RunConfig,
   ItemStatus,
