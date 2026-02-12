@@ -220,7 +220,7 @@ export function validateSettings(raw: unknown): PersistedSettings {
   const migrated = migrateSettings(raw as RawSettings);
   
   // Validate crop ratio preset if present (should be one of the valid presets)
-  const validPresets: CropRatioPreset[] = ['square', 'golden', '16:9', '4:3', '3:2', 'free'];
+  const validPresets: CropRatioPreset[] = ['original', 'free', '1:1', '4:5', '3:4', '9:16', '16:9', '2:3', '3:2'];
   const cropRatioPreset = validPresets.includes(migrated.cropRatioPreset as CropRatioPreset)
     ? (migrated.cropRatioPreset as CropRatioPreset)
     : undefined;

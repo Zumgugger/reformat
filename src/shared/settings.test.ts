@@ -396,10 +396,10 @@ describe('validateSettings', () => {
       outputFormat: 'jpg',
       resize: DEFAULT_RESIZE_SETTINGS,
       quality: { jpg: 85, webp: 85, heic: 85 },
-      cropRatioPreset: 'golden',
+      cropRatioPreset: '16:9',
     };
     const result1 = validateSettings(valid);
-    expect(result1.cropRatioPreset).toBe('golden');
+    expect(result1.cropRatioPreset).toBe('16:9');
 
     // Invalid preset is filtered out
     const invalid = {
@@ -589,12 +589,12 @@ describe('settingsEqual', () => {
     // Different cropRatioPreset
     expect(settingsEqual(base, {
       ...DEFAULT_SETTINGS,
-      cropRatioPreset: 'square',
+      cropRatioPreset: '1:1',
     })).toBe(false);
     
-    // Same cropRatioPreset (both 'golden')
+    // Same cropRatioPreset (both '16:9')
     expect(settingsEqual(
-      { ...DEFAULT_SETTINGS, cropRatioPreset: 'golden' },
-      { ...DEFAULT_SETTINGS, cropRatioPreset: 'golden' }
+      { ...DEFAULT_SETTINGS, cropRatioPreset: '16:9' },
+      { ...DEFAULT_SETTINGS, cropRatioPreset: '16:9' }
     )).toBe(true);
   });});
