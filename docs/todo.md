@@ -158,52 +158,66 @@ Goal: implement pure logic early with thorough unit tests.
 Goal: main imports paths and returns metadata-ready descriptors; renderer shows a basic list.
 
 ### C1. Supported formats + animated exclusions (tests first)
-- [ ] Implement `src/shared/supportedFormats.ts`:
+- [x] Implement `src/shared/supportedFormats.ts`:
 	- allow: jpg/jpeg/png/heic/heif/webp/tiff/bmp
 	- reject: animated GIF and animated WebP (treat as unsupported)
-- [ ] Unit tests for extension parsing, case-insensitivity, tricky names
+- [x] Unit tests for extension parsing, case-insensitivity, tricky names
 
 ### C2. De-duplication (tests first)
-- [ ] Implement `src/shared/dedupe.ts`:
+- [x] Implement `src/shared/dedupe.ts`:
 	- dedupe by canonicalized file path
 	- return warnings count for duplicates
-- [ ] Unit tests: same path twice, path normalization (Windows casing/separators)
+- [x] Unit tests: same path twice, path normalization (Windows casing/separators)
 
 ### C3. Main: file picker
-- [ ] Implement `selectFiles` using Electron dialog APIs
-- [ ] Return plain file paths (no fs reads in renderer)
+- [x] Implement `selectFiles` using Electron dialog APIs
+- [x] Return plain file paths (no fs reads in renderer)
 
 ### C4. Main: import dropped paths (files + folder, non-recursive)
-- [ ] Implement `importDroppedPaths(paths: string[])`:
+- [x] Implement `importDroppedPaths(paths: string[])`:
 	- accept files and directories
 	- for a dropped folder: list immediate children only
 	- filter supported extensions
 	- collect warnings: unsupported items, duplicates, skipped subfolders
-- [ ] Node-side tests using temp directories:
+- [x] Node-side tests using temp directories:
 	- folder contains mix of supported + unsupported + subfolder
 	- verify non-recursive behavior
 	- verify warnings counts
 
 ### C5. Main: metadata extraction
-- [ ] Implement `src/main/metadata.ts` using `sharp.metadata()`:
+- [x] Implement `src/main/metadata.ts` using `sharp.metadata()`:
 	- width/height
 	- best-effort `hasAlpha`
 	- file size bytes
-- [ ] Integration tests that generate images via `sharp` into temp dirs:
+- [x] Integration tests that generate images via `sharp` into temp dirs:
 	- one with alpha, one without
 	- verify dimensions + `hasAlpha` best-effort
 
 ### C6. Renderer: list UI wiring
-- [ ] Create renderer UI: “Select files…” button + drop zone
-- [ ] Show bottom list with: base filename, W×H, size in MiB
-- [ ] Add minimal renderer store (selection order preserved)
-- [ ] Store unit tests: adding items keeps stable ordering; dedupe behavior reflected
+- [x] Create renderer UI: "Select files…" button + drop zone
+- [x] Show bottom list with: base filename, W×H, size in MiB
+- [x] Add minimal renderer store (selection order preserved)
+- [x] Store unit tests: adding items keeps stable ordering; dedupe behavior reflected
 
 ### Acceptance
-- [ ] Dropping a folder imports only supported images (non-recursive) with warning counts
+- [x] Dropping a folder imports only supported images (non-recursive) with warning counts
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (248/248 passing)
+- [x] Update README.md
+- [x] Commit to git
+- [x] Push to GitHub
+
+### Phase C Notes (2026-02-12)
+- Implemented `src/shared/supportedFormats.ts` with 57 unit tests
+- Implemented `src/shared/dedupe.ts` with 41 unit tests
+- Implemented `src/main/import.ts` with 15 integration tests
+- Implemented `src/main/metadata.ts` with 18 integration tests
+- Added sharp dependency for image processing
+- Implemented renderer store (`src/renderer/store.ts`) with 20 unit tests
+- Created renderer UI with drop zone, file list, and Matrix theme
+- Total: 248 passing tests
 
 ---
 

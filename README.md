@@ -6,6 +6,8 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 
 - Offline-only image processing
 - Batch image resizing and format conversion
+- Drag-and-drop file/folder import
+- Supported formats: JPG, PNG, HEIC, WebP, TIFF, BMP, GIF (static only)
 - Matrix-style dark theme UI
 
 ## Development Setup
@@ -46,8 +48,19 @@ npm start
 ```
 src/
   main/          # Electron main process (Node.js)
+    import.ts    # File/folder import with validation
+    metadata.ts  # Image metadata extraction (sharp)
+    ipc.ts       # IPC handlers
   renderer/      # UI (HTML/CSS/TypeScript)
+    store.ts     # Reactive state management
+    types.ts     # Renderer type definitions
   shared/        # Shared types and utilities
+    types.ts     # Domain types (ImageItem, Transform, etc.)
+    bytes.ts     # MiB conversions and formatting
+    paths.ts     # Output folder rules
+    naming.ts    # Output naming and collision handling
+    supportedFormats.ts  # Format validation
+    dedupe.ts    # Path deduplication
 docs/
   blueprint.md   # Implementation blueprint
   specs.md       # Feature specifications
@@ -94,9 +107,19 @@ git push origin main
 - Requires SSH key configured in your environment
 - For WSL users: ensure your SSH key is copied to `~/.ssh/` with proper permissions (600 for private key)
 
+## Dependencies
+
+- **Electron** - Cross-platform desktop application framework
+- **sharp** - High-performance image processing
+- **Vite** - Fast build tool for renderer
+- **Vitest** - Unit testing framework
+- **TypeScript** - Type safety
+
 ## Known Limitations
 
-V1 is currently in Phase B (shared domain + deterministic output rules).
+V1 is currently in Phase C (import pipeline complete).
+- Animated GIF/WebP files are rejected
+- Import is non-recursive (subfolders are skipped)
 
 ## License
 

@@ -8,9 +8,40 @@
 </head>
 <body>
   <div id="app">
-    <h1>Reformat</h1>
-    <p>Image resizing and reformatting tool</p>
-    <p class="status">Status: Ready</p>
+    <header class="app-header">
+      <h1>Reformat</h1>
+    </header>
+    
+    <main class="app-main">
+      <!-- Drop zone / empty state -->
+      <div id="drop-zone" class="drop-zone">
+        <div class="drop-zone-content">
+          <div class="drop-icon">📁</div>
+          <p class="drop-text">Drop images or folders here</p>
+          <p class="drop-subtext">or</p>
+          <button id="select-files-btn" class="btn btn-primary">Select Files...</button>
+        </div>
+      </div>
+      
+      <!-- Image list (hidden when empty) -->
+      <div id="image-list-container" class="image-list-container hidden">
+        <div class="list-header">
+          <span class="list-count" id="list-count">0 images</span>
+          <button id="clear-all-btn" class="btn btn-small">Clear All</button>
+        </div>
+        <ul id="image-list" class="image-list">
+          <!-- Items added dynamically -->
+        </ul>
+        <div class="list-actions">
+          <button id="add-more-btn" class="btn btn-secondary">Add More...</button>
+        </div>
+      </div>
+    </main>
+    
+    <footer class="app-footer">
+      <div class="status" id="status">Ready</div>
+      <div class="warnings" id="warnings"></div>
+    </footer>
   </div>
   <script type="module" src="./index.ts"></script>
 </body>
