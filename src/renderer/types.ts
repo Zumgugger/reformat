@@ -13,7 +13,15 @@ export type {
   ResizeSettingsTargetMiB,
   QualitySettings,
   DrivingDimension,
+  Transform,
+  Crop,
+  ItemRunConfig,
+  RunConfig,
+  ItemStatus,
+  ItemResult,
 } from '../shared/types';
+
+export { DEFAULT_TRANSFORM, DEFAULT_CROP } from '../shared/types';
 
 export type { PersistedSettings } from '../shared/settings';
 
@@ -58,8 +66,47 @@ export interface ImportWithMetadataResult {
   metadataFailures: { path: string; reason: string }[];
 }
 
+/** Export progress update */
+export interface ExportProgress {
+  runId: string;
+  total: number;
+  completed: number;
+  succeeded: number;
+  failed: number;
+  canceled: number;
+  latest?: {
+    itemId: string;
+    status: string;
+    outputPath?: string;
+    outputBytes?: number;
+    error?: string;
+    warnings?: string[];
+  };
+}
+
+/** Export result */
+export interface ExportResult {
+  runId: string;
+  outputFolder: string;
+  results: Array<{
+    itemId: string;
+    status: string;
+    outputPath?: string;
+    outputBytes?: number;
+    error?: string;
+    warnings?: string[];
+  }>;
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    canceled: number;
+  };
+}
+
 /** Persisted settings type for IPC */
 import type { PersistedSettings } from '../shared/settings';
+import type { RunConfig } from '../shared/types';
 
 /** The reformat API exposed to the renderer */
 export interface ReformatAPI {
@@ -77,6 +124,11 @@ export interface ReformatAPI {
   saveSettings: (settings: PersistedSettings) => Promise<void>;
   updateSettings: (partial: Partial<PersistedSettings>) => Promise<PersistedSettings>;
   resetSettings: () => Promise<PersistedSettings>;
+  // Export run APIs
+  startRun: (items: ImageItem[], config: RunConfig) => Promise<ExportResult>;
+  cancelRun: (runId: string) => Promise<boolean>;
+  openFolder: (folderPath: string) => Promise<void>;
+  onRunProgress: (callback: (progress: ExportProgress) => void) => () => void;
 }
 
 // Extend the Window interface

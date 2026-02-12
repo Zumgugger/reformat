@@ -9,6 +9,8 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - Drag-and-drop file/folder import
 - Supported formats: JPG, PNG, HEIC, WebP, TIFF, BMP, GIF (static only)
 - Matrix-style dark theme UI
+- Concurrent export with progress tracking (concurrency: 4)
+- Cancellation support during batch processing
 
 ## Development Setup
 
@@ -52,6 +54,10 @@ src/
     metadata.ts  # Image metadata extraction (sharp)
     settingsStore.ts  # Settings persistence
     ipc.ts       # IPC handlers
+    processor/   # Image processing pipeline
+      workerPool.ts   # Concurrent task execution (4 workers)
+      pipeline.ts     # Image transformation (sharp)
+      exporter.ts     # Batch export orchestration
   renderer/      # UI (HTML/CSS/TypeScript)
     store.ts     # Reactive state management (images)
     settingsStore.ts  # Settings state management
@@ -120,10 +126,11 @@ git push origin main
 
 ## Known Limitations
 
-V1 is currently in Phase D (settings persistence complete).
+V1 is currently in Phase E (export functionality complete).
 - Animated GIF/WebP files are rejected
 - Import is non-recursive (subfolders are skipped)
 - Settings are saved to user data directory on change
+- 458 tests passing
 
 ## License
 

@@ -53,6 +53,67 @@ export interface PersistedSettings {
   };
 }
 
+/** Run configuration snapshot */
+export interface RunConfig {
+  outputFormat: string;
+  resizeSettings: unknown;
+  quality: {
+    jpg: number;
+    webp: number;
+    heic: number;
+  };
+  items: Array<{
+    itemId: string;
+    transform: {
+      rotateSteps: 0 | 1 | 2 | 3;
+      flipH: boolean;
+      flipV: boolean;
+    };
+    crop: {
+      active: boolean;
+      ratioPreset: string;
+      rect: { x: number; y: number; width: number; height: number };
+    };
+  }>;
+}
+
+/** Item status during/after a run */
+export type ItemStatus = 'pending' | 'processing' | 'completed' | 'failed' | 'canceled' | 'skipped';
+
+/** Result for a single item */
+export interface ItemResult {
+  itemId: string;
+  status: ItemStatus;
+  outputPath?: string;
+  outputBytes?: number;
+  error?: string;
+  warnings?: string[];
+}
+
+/** Export progress update */
+export interface ExportProgress {
+  runId: string;
+  total: number;
+  completed: number;
+  succeeded: number;
+  failed: number;
+  canceled: number;
+  latest?: ItemResult;
+}
+
+/** Export result */
+export interface ExportResult {
+  runId: string;
+  outputFolder: string;
+  results: ItemResult[];
+  summary: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    canceled: number;
+  };
+}
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('reformat', {
   // Test ping
@@ -99,5 +160,34 @@ contextBridge.exposeInMainWorld('reformat', {
   // Reset settings to defaults
   resetSettings: async (): Promise<PersistedSettings> => {
     return await ipcRenderer.invoke('resetSettings');
+  },
+
+  // === Export Run APIs ===
+
+  // Start an export run
+  startRun: async (items: ImageItem[], config: RunConfig): Promise<ExportResult> => {
+    return await ipcRenderer.invoke('startRun', items, config);
+  },
+
+  // Cancel an active run
+  cancelRun: async (runId: string): Promise<boolean> => {
+    return await ipcRenderer.invoke('cancelRun', runId);
+  },
+
+  // Open folder in file explorer
+  openFolder: async (folderPath: string): Promise<void> => {
+    return await ipcRenderer.invoke('openFolder', folderPath);
+  },
+
+  // Subscribe to run progress events
+  onRunProgress: (callback: (progress: ExportProgress) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, progress: ExportProgress) => {
+      callback(progress);
+    };
+    ipcRenderer.on('runProgress', listener);
+    // Return unsubscribe function
+    return () => {
+      ipcRenderer.removeListener('runProgress', listener);
+    };
   },
 });

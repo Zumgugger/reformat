@@ -7,7 +7,17 @@ import {
   updateSettings,
   resetSettings,
 } from './settingsStore';
-import type { ImageItem } from '../shared/types';
+import {
+  exportImages,
+  openFolder,
+  generateRunId,
+  createCancellationToken,
+  type ExportJob,
+  type ExportProgress,
+  type ExportResult,
+  type CancellationToken,
+} from './processor/exporter';
+import type { ImageItem, RunConfig, ItemResult } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
 
 /** Result of full import with metadata extraction */
@@ -89,5 +99,62 @@ export function registerIpcHandlers(): void {
   // Reset settings to defaults
   ipcMain.handle('resetSettings', async (): Promise<PersistedSettings> => {
     return await resetSettings();
+  });
+
+  // === Export Run IPC Handlers ===
+
+  // Active runs and their cancellation tokens
+  const activeRuns = new Map<string, CancellationToken>();
+
+  // Start an export run
+  ipcMain.handle(
+    'startRun',
+    async (
+      event,
+      items: ImageItem[],
+      config: RunConfig
+    ): Promise<ExportResult> => {
+      const runId = generateRunId();
+      const cancellationToken = createCancellationToken();
+      activeRuns.set(runId, cancellationToken);
+
+      const window = BrowserWindow.fromWebContents(event.sender);
+
+      const job: ExportJob = {
+        runId,
+        items,
+        config,
+        cancellationToken,
+      };
+
+      // Progress callback sends updates to renderer
+      const onProgress = (progress: ExportProgress) => {
+        if (window && !window.isDestroyed()) {
+          window.webContents.send('runProgress', progress);
+        }
+      };
+
+      try {
+        const result = await exportImages(job, onProgress);
+        return result;
+      } finally {
+        activeRuns.delete(runId);
+      }
+    }
+  );
+
+  // Cancel an active run
+  ipcMain.handle('cancelRun', async (_event, runId: string): Promise<boolean> => {
+    const token = activeRuns.get(runId);
+    if (token) {
+      token.cancel();
+      return true;
+    }
+    return false;
+  });
+
+  // Open output folder in file explorer
+  ipcMain.handle('openFolder', async (_event, folderPath: string): Promise<void> => {
+    await openFolder(folderPath);
   });
 }

@@ -36,6 +36,18 @@
           </ul>
           <div class="list-actions">
             <button id="add-more-btn" class="btn btn-secondary">Add More...</button>
+            <button id="convert-btn" class="btn btn-primary">Convert</button>
+          </div>
+          
+          <!-- Progress bar (hidden when not running) -->
+          <div id="progress-container" class="progress-container hidden">
+            <div class="progress-bar-outer">
+              <div class="progress-bar-inner" id="progress-bar" style="width: 0%"></div>
+            </div>
+            <div class="progress-text">
+              <span id="progress-text">0 / 0</span>
+              <button id="cancel-btn" class="btn btn-small btn-danger">Cancel</button>
+            </div>
           </div>
         </div>
       </div>

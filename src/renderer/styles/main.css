@@ -515,3 +515,93 @@ body {
   color: var(--color-warning);
   font-size: 0.8rem;
 }
+
+/* Progress bar */
+.progress-container {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.progress-container.hidden {
+  display: none;
+}
+
+.progress-bar-outer {
+  width: 100%;
+  height: 8px;
+  background-color: var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: var(--spacing-sm);
+}
+
+.progress-bar-inner {
+  height: 100%;
+  background-color: var(--color-accent);
+  transition: width 0.2s ease;
+  box-shadow: 0 0 10px var(--color-accent);
+}
+
+.progress-text {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--color-text-dim);
+  font-size: 0.85rem;
+}
+
+/* Danger button (Cancel) */
+.btn-danger {
+  color: var(--color-error);
+  border-color: var(--color-error);
+}
+
+.btn-danger:hover {
+  background-color: rgba(255, 68, 68, 0.2);
+}
+
+/* List actions */
+.list-actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
+}
+
+.list-actions .btn-primary {
+  flex: 1;
+}
+
+/* Item status indicators */
+.image-list-item.processing {
+  background-color: rgba(0, 255, 65, 0.1);
+}
+
+.image-list-item.completed {
+  opacity: 0.7;
+}
+
+.image-list-item.completed .item-name::after {
+  content: ' ✓';
+  color: var(--color-accent);
+}
+
+.image-list-item.failed {
+  background-color: rgba(255, 68, 68, 0.1);
+}
+
+.image-list-item.failed .item-name::after {
+  content: ' ✗';
+  color: var(--color-error);
+}
+
+.image-list-item.canceled {
+  opacity: 0.5;
+}
+
+.image-list-item.canceled .item-name::after {
+  content: ' ○';
+  color: var(--color-text-muted);
+}

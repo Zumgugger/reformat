@@ -285,54 +285,81 @@ Goal: settings persist across launches and can be edited when idle.
 Goal: click Convert/Export runs processing for all items with concurrency 4.
 
 ### E1. Worker pool (tests first)
-- [ ] Implement `src/main/processor/workerPool.ts`:
+- [x] Implement `src/main/processor/workerPool.ts`:
 	- fixed concurrency = 4
 	- cancellation token/flag support
-- [ ] Unit tests:
+- [x] Unit tests:
 	- asserts max in-flight tasks never exceeds 4
 	- per-task failures don’t abort remaining tasks
 
 ### E2. Export pipeline v1 (pixels + percent)
-- [ ] Implement `src/main/processor/pipeline.ts` using real `sharp`:
+- [x] Implement `src/main/processor/pipeline.ts` using real `sharp`:
 	- respect EXIF orientation (`rotate()`)
 	- resize pixels/percent (keep ratio rules)
 	- encode: same/jpg/png/webp/tiff/bmp
 	- apply quality when applicable
 	- best-effort convert to sRGB + embed profile
-- [ ] Integration tests with generated images:
+- [x] Integration tests with generated images:
 	- assert output dimensions
 	- assert output format by reading metadata
 
 ### E3. Destination + naming + timestamps
-- [ ] Implement exporter:
+- [x] Implement exporter:
 	- choose destination folder using shared rule
 	- generate non-colliding output filename (shared naming)
 	- never overwrite; always append `_reformat`
 	- preserve modified timestamp best-effort
-- [ ] Temp-dir tests:
+- [x] Temp-dir tests:
 	- collision behavior produces `-1`, `-2`...
 	- timestamp preservation best-effort (platform-tolerant assertions)
 
 ### E4. IPC: start run + progress events
-- [ ] Implement IPC `startRun(config, items)` with locked settings snapshot
-- [ ] Implement `onRunEvent` to emit per-file status/progress + summary warnings
-- [ ] Ensure per-file failure is recorded and run continues
+- [x] Implement IPC `startRun(config, items)` with locked settings snapshot
+- [x] Implement `onRunEvent` to emit per-file status/progress + summary warnings
+- [x] Ensure per-file failure is recorded and run continues
 
 ### E5. Renderer: Convert/Export UX
-- [ ] Add Convert/Export button
-- [ ] Bottom list shows per-file status + overall progress
-- [ ] Lock settings + lock preview switching during run
-- [ ] After run: auto-open output folder (via IPC)
+- [x] Add Convert/Export button
+- [x] Bottom list shows per-file status + overall progress
+- [x] Lock settings + lock preview switching during run
+- [x] After run: auto-open output folder (via IPC)
 
 ### Acceptance
-- [ ] Batch runs 4 at a time, skips failures, shows summary count
+- [x] Batch runs 4 at a time, skips failures, shows summary count
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (458/458 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
+
+### Phase E Notes (2025-01-18)
+- Implemented `src/main/processor/workerPool.ts` with 22 unit tests:
+  - Fixed concurrency of 4 (configurable)
+  - Cancellation token support with proper task cleanup
+  - Per-task failure handling without aborting remaining tasks
+  - Progress callback with detailed statistics
+- Implemented `src/main/processor/pipeline.ts` with 32 tests:
+  - EXIF orientation handling via sharp.rotate()
+  - Resize modes: pixels (width/height/maxSide), percent
+  - Format conversion: same/jpg/png/webp/tiff/heic (BMP falls back to PNG)
+  - Quality settings for JPEG, WebP, HEIC
+  - Transform support (rotation, flip)
+  - sRGB colorspace conversion
+- Implemented `src/main/processor/exporter.ts` with 18 tests:
+  - Uses shared paths.ts for output folder resolution
+  - Uses shared naming.ts for collision-free filenames
+  - Pre-resolves output paths to prevent race conditions
+  - Timestamp preservation (best-effort)
+  - Progress callbacks and cancellation support
+- Added IPC handlers in `src/main/ipc.ts`:
+  - `startRun(items, config)` - starts export with progress events
+  - `cancelRun(runId)` - cancels active run
+  - `openFolder(path)` - opens output folder
+- Updated `src/main/preload.ts` with export APIs
+- Added renderer UI with Convert button, progress bar, cancel button
+- Total: 458 passing tests (72 new tests)
 
 ---
 

@@ -6,7 +6,8 @@
 import './types'; // Import types to extend Window interface
 import { store, formatItemInfo } from './store';
 import { settingsStore } from './settingsStore';
-import type { ImageItem, OutputFormat, ResizeSettings } from './types';
+import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult } from './types';
+import { DEFAULT_TRANSFORM, DEFAULT_CROP } from './types';
 
 // DOM Elements
 const dropZone = document.getElementById('drop-zone') as HTMLDivElement;
@@ -18,6 +19,11 @@ const warningsEl = document.getElementById('warnings') as HTMLDivElement;
 const selectFilesBtn = document.getElementById('select-files-btn') as HTMLButtonElement;
 const addMoreBtn = document.getElementById('add-more-btn') as HTMLButtonElement;
 const clearAllBtn = document.getElementById('clear-all-btn') as HTMLButtonElement;
+const convertBtn = document.getElementById('convert-btn') as HTMLButtonElement;
+const progressContainer = document.getElementById('progress-container') as HTMLDivElement;
+const progressBar = document.getElementById('progress-bar') as HTMLDivElement;
+const progressText = document.getElementById('progress-text') as HTMLSpanElement;
+const cancelBtn = document.getElementById('cancel-btn') as HTMLButtonElement;
 
 // Settings DOM Elements
 const settingsPanel = document.getElementById('settings-panel') as HTMLDivElement;
@@ -35,6 +41,166 @@ const qualitySlider = document.getElementById('quality-slider') as HTMLInputElem
 const qualityValue = document.getElementById('quality-value') as HTMLSpanElement;
 const qualityGroup = document.getElementById('quality-group') as HTMLDivElement;
 const settingsLocked = document.getElementById('settings-locked') as HTMLDivElement;
+
+// Export state
+let isRunning = false;
+let currentRunId: string | null = null;
+let unsubscribeProgress: (() => void) | null = null;
+const itemStatusMap = new Map<string, string>(); // itemId -> status
+
+/**
+ * Build run config from current settings and items.
+ */
+function buildRunConfig(items: ImageItem[]): RunConfig {
+  const settings = settingsStore.getSettings();
+  return {
+    outputFormat: settings.outputFormat as OutputFormat,
+    resizeSettings: settings.resize,
+    quality: settings.quality,
+    items: items.map((item) => ({
+      itemId: item.id,
+      transform: DEFAULT_TRANSFORM,
+      crop: DEFAULT_CROP,
+    })),
+  };
+}
+
+/**
+ * Update UI to reflect running state.
+ */
+function setRunningState(running: boolean): void {
+  isRunning = running;
+  
+  // Lock settings
+  settingsStore.setLocked(running);
+  
+  // Update buttons
+  convertBtn.disabled = running;
+  addMoreBtn.disabled = running;
+  clearAllBtn.disabled = running;
+  
+  // Show/hide progress
+  progressContainer.classList.toggle('hidden', !running);
+  
+  if (running) {
+    progressBar.style.width = '0%';
+    progressText.textContent = '0 / 0';
+    itemStatusMap.clear();
+  }
+}
+
+/**
+ * Update item status in UI.
+ */
+function updateItemStatus(itemId: string, status: string): void {
+  itemStatusMap.set(itemId, status);
+  const listItem = imageList.querySelector(`[data-id="${itemId}"]`);
+  if (listItem) {
+    // Remove all status classes
+    listItem.classList.remove('processing', 'completed', 'failed', 'canceled');
+    // Add new status class
+    if (status === 'processing' || status === 'completed' || status === 'failed' || status === 'canceled') {
+      listItem.classList.add(status);
+    }
+  }
+}
+
+/**
+ * Handle run progress updates.
+ */
+function handleRunProgress(progress: ExportProgress): void {
+  if (progress.runId !== currentRunId) return;
+  
+  // Update progress bar
+  const percent = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
+  progressBar.style.width = `${percent}%`;
+  progressText.textContent = `${progress.completed} / ${progress.total}`;
+  
+  // Update item status
+  if (progress.latest) {
+    updateItemStatus(progress.latest.itemId, progress.latest.status);
+  }
+}
+
+/**
+ * Start export run.
+ */
+async function startExport(): Promise<void> {
+  const items = store.getState().items;
+  if (items.length === 0) {
+    store.setStatus('No images to convert');
+    return;
+  }
+  
+  setRunningState(true);
+  store.setStatus('Processing...');
+  
+  // Subscribe to progress events
+  unsubscribeProgress = window.reformat.onRunProgress(handleRunProgress);
+  
+  try {
+    const config = buildRunConfig(items);
+    const result = await window.reformat.startRun(items, config);
+    
+    currentRunId = result.runId;
+    
+    // Update final statuses for all items
+    for (const itemResult of result.results) {
+      updateItemStatus(itemResult.itemId, itemResult.status);
+    }
+    
+    // Build status message
+    const { summary, outputFolder } = result;
+    const parts: string[] = [];
+    
+    if (summary.succeeded > 0) {
+      parts.push(`${summary.succeeded} converted`);
+    }
+    if (summary.failed > 0) {
+      parts.push(`${summary.failed} failed`);
+    }
+    if (summary.canceled > 0) {
+      parts.push(`${summary.canceled} canceled`);
+    }
+    
+    const statusMsg = parts.join(', ') || 'Complete';
+    store.setStatus(statusMsg);
+    
+    // Open output folder (only if some succeeded)
+    if (summary.succeeded > 0 && outputFolder) {
+      try {
+        await window.reformat.openFolder(outputFolder);
+      } catch (err) {
+        console.warn('Failed to open output folder:', err);
+      }
+    }
+  } catch (error) {
+    console.error('Export failed:', error);
+    store.setStatus('Export failed', [String(error)]);
+  } finally {
+    setRunningState(false);
+    currentRunId = null;
+    
+    if (unsubscribeProgress) {
+      unsubscribeProgress();
+      unsubscribeProgress = null;
+    }
+  }
+}
+
+/**
+ * Cancel current export run.
+ */
+async function cancelExport(): Promise<void> {
+  if (!currentRunId) return;
+  
+  try {
+    await window.reformat.cancelRun(currentRunId);
+    store.setStatus('Canceling...');
+  } catch (error) {
+    console.error('Cancel failed:', error);
+  }
+}
 
 /**
  * Import files via the main process API.
@@ -511,6 +677,12 @@ async function init(): Promise<void> {
     store.clearItems();
     store.setStatus('Ready');
   });
+  
+  // Convert button
+  convertBtn.addEventListener('click', startExport);
+  
+  // Cancel button
+  cancelBtn.addEventListener('click', cancelExport);
 
   // Subscribe to store changes
   store.subscribe((state, event) => {
