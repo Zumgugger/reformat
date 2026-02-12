@@ -1046,3 +1046,151 @@ body {
 .crop-handle:hover {
   background-color: var(--color-text);
 }
+
+/* ===== Lens Overlay (100% Detail) ===== */
+
+.lens-controls {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-top: 1px solid var(--color-border);
+  align-items: center;
+}
+
+.lens-toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  cursor: pointer;
+  color: var(--color-text-dim);
+  font-size: 0.85rem;
+}
+
+.lens-toggle input[type="checkbox"] {
+  accent-color: var(--color-accent);
+}
+
+.lens-toggle:hover {
+  color: var(--color-text);
+}
+
+.lens-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.lens-overlay.hidden {
+  display: none;
+}
+
+.lens-overlay.active {
+  pointer-events: auto;
+}
+
+.lens-rect {
+  position: absolute;
+  border: 2px dashed var(--color-accent);
+  background-color: rgba(0, 255, 65, 0.1);
+  box-shadow: 0 0 0 2000px rgba(0, 0, 0, 0.3);
+  cursor: move;
+  pointer-events: auto;
+}
+
+.lens-rect:hover {
+  border-color: var(--color-text);
+  background-color: rgba(0, 255, 65, 0.15);
+}
+
+/* ===== Detail Preview Panel (100% Zoom) ===== */
+
+.main-detail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+.main-detail.hidden {
+  display: none;
+}
+
+.detail-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.detail-title {
+  color: var(--color-accent);
+  font-size: 0.9rem;
+  font-weight: bold;
+}
+
+.detail-info {
+  color: var(--color-text-dim);
+  font-size: 0.8rem;
+}
+
+.detail-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-md);
+  overflow: hidden;
+  background-color: var(--color-bg);
+  min-height: 200px;
+}
+
+.detail-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-height: 200px;
+}
+
+.detail-placeholder-text {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.detail-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+}
+
+.detail-wrapper.hidden {
+  display: none;
+}
+
+.detail-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border: 1px solid var(--color-border);
+  image-rendering: pixelated; /* Show pixels at 1:1 */
+}

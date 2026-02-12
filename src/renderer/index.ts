@@ -25,6 +25,16 @@ import {
   cloneCrop,
   CROP_RATIO_PRESETS,
 } from '../shared/crop';
+import {
+  createCenteredLens,
+  calculateLensDimensions,
+  normalizedToScreenLens,
+  normalizedToPixelRegion,
+  moveLens,
+  clampLensPosition,
+  isLensFullCoverage,
+  type LensPosition,
+} from '../shared/lens';
 
 // DOM Elements
 const dropZone = document.getElementById('drop-zone') as HTMLDivElement;
@@ -89,6 +99,17 @@ const cropQueueIndex = document.getElementById('crop-queue-index') as HTMLSpanEl
 const cropApplyBtn = document.getElementById('crop-apply-btn') as HTMLButtonElement;
 const cropCancelBtn = document.getElementById('crop-cancel-btn') as HTMLButtonElement;
 
+// Lens (100% detail) DOM Elements
+const lensEnabledCheckbox = document.getElementById('lens-enabled') as HTMLInputElement;
+const lensOverlay = document.getElementById('lens-overlay') as HTMLDivElement;
+const lensRect = document.getElementById('lens-rect') as HTMLDivElement;
+const detailPanelContainer = document.getElementById('detail-panel-container') as HTMLDivElement;
+const detailContainer = document.getElementById('detail-container') as HTMLDivElement;
+const detailPlaceholder = document.getElementById('detail-placeholder') as HTMLDivElement;
+const detailWrapper = document.getElementById('detail-wrapper') as HTMLDivElement;
+const detailImage = document.getElementById('detail-image') as HTMLImageElement;
+const detailInfo = document.getElementById('detail-info') as HTMLSpanElement;
+
 // Export state
 let isRunning = false;
 let currentRunId: string | null = null;
@@ -116,6 +137,15 @@ let cropQueueItems: ImageItem[] = [];
 let cropQueueCurrentIndex = 0;
 let cropQueueCompletedIds: Set<string> = new Set();
 let cropQueueCanceled = false;
+
+// Lens (100% detail preview) state
+let isLensEnabled = false;
+let currentLensPosition: LensPosition | null = null;
+let isLensDragging = false;
+let lensDragStartX = 0;
+let lensDragStartY = 0;
+let lensDragStartPosition: LensPosition | null = null;
+let isLoadingDetailPreview = false;
 
 /**
  * Get or create transform for an item.
@@ -242,6 +272,10 @@ async function loadPreview(): Promise<void> {
     // Update crop overlay after image loads
     previewImage.onload = () => {
       updateCropOverlay();
+      // Update lens if enabled
+      if (isLensEnabled) {
+        initializeLensForItem();
+      }
     };
   } catch (error) {
     console.error('Failed to load preview:', error);
@@ -563,6 +597,279 @@ function handleCropDragEnd(): void {
   isCropDragging = false;
   cropDragHandle = null;
   cropDragStartRect = null;
+}
+
+// ===== Lens (100% Detail Preview) Functions =====
+
+/**
+ * Show lens overlay.
+ */
+function showLensOverlay(): void {
+  if (lensOverlay) {
+    lensOverlay.classList.remove('hidden');
+    lensOverlay.classList.add('active');
+  }
+}
+
+/**
+ * Hide lens overlay.
+ */
+function hideLensOverlay(): void {
+  if (lensOverlay) {
+    lensOverlay.classList.add('hidden');
+    lensOverlay.classList.remove('active');
+  }
+}
+
+/**
+ * Show detail preview panel.
+ */
+function showDetailPanel(): void {
+  if (detailPanelContainer) {
+    detailPanelContainer.classList.remove('hidden');
+  }
+}
+
+/**
+ * Hide detail preview panel.
+ */
+function hideDetailPanel(): void {
+  if (detailPanelContainer) {
+    detailPanelContainer.classList.add('hidden');
+  }
+}
+
+/**
+ * Initialize lens position for current item.
+ */
+function initializeLensForItem(): void {
+  const item = getSelectedItem();
+  if (!item) {
+    currentLensPosition = null;
+    return;
+  }
+
+  // Get displayed image dimensions for lens calculation
+  const imageRect = previewImage.getBoundingClientRect();
+  if (!imageRect || imageRect.width === 0 || imageRect.height === 0) {
+    // Image not loaded yet, retry after a small delay
+    setTimeout(initializeLensForItem, 50);
+    return;
+  }
+
+  // Calculate detail panel container size
+  const detailRect = detailContainer?.getBoundingClientRect();
+  const detailWidth = detailRect?.width ?? 300;
+  const detailHeight = detailRect?.height ?? 300;
+
+  // Get original image dimensions (accounting for transform)
+  const transform = getItemTransform(item.id);
+  const dims = getTransformedDimensions(item.width, item.height, transform);
+
+  try {
+    // Calculate lens dimensions based on detail panel size
+    const lensDims = calculateLensDimensions(
+      dims.width,
+      dims.height,
+      detailWidth,
+      detailHeight,
+      transform
+    );
+
+    // Create centered lens
+    currentLensPosition = createCenteredLens(lensDims.width, lensDims.height);
+    updateLensOverlay();
+    loadDetailPreview();
+  } catch (error) {
+    console.error('Failed to initialize lens:', error);
+    currentLensPosition = createCenteredLens(0.3, 0.3);
+    updateLensOverlay();
+  }
+}
+
+/**
+ * Update lens overlay position on screen.
+ */
+function updateLensOverlay(): void {
+  if (!lensOverlay || !lensRect || !currentLensPosition) return;
+
+  const imageRect = previewImage.getBoundingClientRect();
+  if (!imageRect || imageRect.width === 0) return;
+
+  // Convert normalized lens position to screen coordinates
+  const screen = normalizedToScreenLens(
+    currentLensPosition,
+    imageRect.width,
+    imageRect.height
+  );
+
+  // Position the lens rect
+  lensRect.style.left = `${screen.x}px`;
+  lensRect.style.top = `${screen.y}px`;
+  lensRect.style.width = `${screen.width}px`;
+  lensRect.style.height = `${screen.height}px`;
+
+  // Update detail info
+  if (detailInfo) {
+    const item = getSelectedItem();
+    if (item) {
+      const transform = getItemTransform(item.id);
+      const dims = getTransformedDimensions(item.width, item.height, transform);
+      const region = normalizedToPixelRegion(currentLensPosition, dims.width, dims.height, transform);
+      detailInfo.textContent = `${region.width} × ${region.height}px`;
+    }
+  }
+}
+
+/**
+ * Load detail preview for current lens position.
+ */
+async function loadDetailPreview(): Promise<void> {
+  if (!isLensEnabled || !currentLensPosition || isLoadingDetailPreview) return;
+
+  const item = getSelectedItem();
+  if (!item || !item.sourcePath) {
+    showDetailPlaceholder();
+    return;
+  }
+
+  isLoadingDetailPreview = true;
+
+  try {
+    const transform = getItemTransform(item.id);
+    const dims = getTransformedDimensions(item.width, item.height, transform);
+    
+    // Convert lens position to pixel region
+    const region = normalizedToPixelRegion(
+      currentLensPosition,
+      dims.width,
+      dims.height,
+      transform
+    );
+
+    // Get detail preview from main process
+    const result = await window.reformat.getDetailPreview(item.sourcePath, {
+      region: {
+        left: region.left,
+        top: region.top,
+        width: region.width,
+        height: region.height,
+      },
+      transform,
+    });
+
+    // Check if lens is still enabled and item is still selected
+    if (!isLensEnabled || selectedItemId !== item.id) {
+      return;
+    }
+
+    // Display detail preview
+    if (detailImage) {
+      detailImage.src = result.dataUrl;
+    }
+    if (detailWrapper) {
+      detailWrapper.classList.remove('hidden');
+    }
+    if (detailPlaceholder) {
+      detailPlaceholder.classList.add('hidden');
+    }
+    if (detailInfo) {
+      detailInfo.textContent = `${result.width} × ${result.height}px`;
+    }
+  } catch (error) {
+    console.error('Failed to load detail preview:', error);
+    showDetailPlaceholder('Failed to load detail');
+  } finally {
+    isLoadingDetailPreview = false;
+  }
+}
+
+/**
+ * Show detail placeholder.
+ */
+function showDetailPlaceholder(message = 'Enable 100% Detail to view'): void {
+  if (detailWrapper) {
+    detailWrapper.classList.add('hidden');
+  }
+  if (detailPlaceholder) {
+    detailPlaceholder.classList.remove('hidden');
+    const textEl = detailPlaceholder.querySelector('.detail-placeholder-text');
+    if (textEl) {
+      textEl.textContent = message;
+    }
+  }
+  if (detailInfo) {
+    detailInfo.textContent = '';
+  }
+}
+
+/**
+ * Handle lens enable/disable toggle.
+ */
+function handleLensToggle(): void {
+  if (isRunning) return;
+
+  isLensEnabled = lensEnabledCheckbox?.checked ?? false;
+
+  if (isLensEnabled) {
+    showDetailPanel();
+    showLensOverlay();
+    // Wait for detail panel to be visible before initializing lens
+    requestAnimationFrame(() => {
+      initializeLensForItem();
+    });
+  } else {
+    hideDetailPanel();
+    hideLensOverlay();
+    currentLensPosition = null;
+    showDetailPlaceholder();
+  }
+}
+
+/**
+ * Handle lens drag start.
+ */
+function handleLensDragStart(e: MouseEvent): void {
+  if (!currentLensPosition || !isLensEnabled) return;
+
+  e.preventDefault();
+  isLensDragging = true;
+  lensDragStartX = e.clientX;
+  lensDragStartY = e.clientY;
+  lensDragStartPosition = { ...currentLensPosition };
+}
+
+/**
+ * Handle lens drag move.
+ */
+function handleLensDragMove(e: MouseEvent): void {
+  if (!isLensDragging || !lensDragStartPosition) return;
+
+  e.preventDefault();
+
+  const imageRect = previewImage.getBoundingClientRect();
+  if (!imageRect || imageRect.width === 0) return;
+
+  // Calculate delta in normalized coordinates
+  const deltaX = (e.clientX - lensDragStartX) / imageRect.width;
+  const deltaY = (e.clientY - lensDragStartY) / imageRect.height;
+
+  // Move lens with clamping
+  currentLensPosition = moveLens(lensDragStartPosition, deltaX, deltaY);
+  updateLensOverlay();
+}
+
+/**
+ * Handle lens drag end.
+ */
+function handleLensDragEnd(): void {
+  if (!isLensDragging) return;
+
+  isLensDragging = false;
+  lensDragStartPosition = null;
+
+  // Load detail preview at new position
+  loadDetailPreview();
 }
 
 /**
@@ -1645,6 +1952,18 @@ async function init(): Promise<void> {
       }
     });
   });
+
+  // Lens (100% detail) controls
+  if (lensEnabledCheckbox) {
+    lensEnabledCheckbox.addEventListener('change', handleLensToggle);
+  }
+
+  // Lens drag handlers
+  if (lensRect) {
+    lensRect.addEventListener('mousedown', handleLensDragStart);
+  }
+  document.addEventListener('mousemove', handleLensDragMove);
+  document.addEventListener('mouseup', handleLensDragEnd);
 
   // Initialize preview state
   setTransformButtonsEnabled(false);

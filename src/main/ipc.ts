@@ -17,7 +17,14 @@ import {
   type ExportResult,
   type CancellationToken,
 } from './processor/exporter';
-import { generatePreview, type PreviewResult, type PreviewOptions } from './preview';
+import {
+  generatePreview,
+  generateDetailPreview,
+  type PreviewResult,
+  type PreviewOptions,
+  type DetailPreviewOptions,
+  type DetailPreviewResult,
+} from './preview';
 import type { ImageItem, RunConfig, ItemResult, Transform } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
 
@@ -185,6 +192,26 @@ export function registerIpcHandlers(): void {
         transform: options.transform,
         format: 'jpeg',
         quality: 80,
+      });
+    }
+  );
+
+  // Get detail preview (1:1 region) for an item
+  ipcMain.handle(
+    'getDetailPreview',
+    async (
+      _event,
+      sourcePath: string,
+      options: {
+        region: { left: number; top: number; width: number; height: number };
+        transform?: Transform;
+      }
+    ): Promise<DetailPreviewResult> => {
+      return await generateDetailPreview(sourcePath, {
+        region: options.region,
+        transform: options.transform,
+        format: 'png', // Use PNG for 1:1 quality
+        quality: 95,
       });
     }
   );

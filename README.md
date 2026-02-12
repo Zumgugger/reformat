@@ -18,6 +18,7 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - **Crop with ratio presets (Free, 1:1, 4:5, 3:4, 9:16, 16:9, 2:3, 3:2)**
 - **Draggable crop overlay with rule-of-thirds grid**
 - **Batch crop queue: one-by-one crop & export when multiple images have crop enabled**
+- **100% detail preview with draggable lens for pixel-perfect inspection**
 
 ## Development Setup
 
@@ -79,6 +80,7 @@ src/
     naming.ts    # Output naming and collision handling
     transform.ts # Transform utilities (rotate/flip)
     crop.ts      # Crop utilities (ratio presets, coordinate conversion)
+    lens.ts      # Lens utilities (100% detail preview)
     supportedFormats.ts  # Format validation
     dedupe.ts    # Path deduplication
 docs/

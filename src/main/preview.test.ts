@@ -7,7 +7,7 @@ import sharp from 'sharp';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
-import { generatePreview, generatePreviewFromBuffer } from './preview';
+import { generatePreview, generatePreviewFromBuffer, generateDetailPreview, generateDetailPreviewFromBuffer } from './preview';
 import type { Transform } from '../shared/types';
 
 describe('preview generation', () => {
@@ -236,6 +236,131 @@ describe('preview generation', () => {
       // Dimensions should be swapped after 90° rotation
       expect(result.width).toBe(100);
       expect(result.height).toBe(200);
+    });
+  });
+
+  describe('generateDetailPreview', () => {
+    it('should extract a region at 1:1 from a file', async () => {
+      const testFile = await createTestImage('test.png', 400, 300);
+      
+      const result = await generateDetailPreview(testFile, {
+        region: { left: 100, top: 50, width: 200, height: 150 },
+      });
+      
+      expect(result.dataUrl).toMatch(/^data:image\/png;base64,/);
+      expect(result.width).toBe(200);
+      expect(result.height).toBe(150);
+    });
+
+    it('should not scale the region (1:1 extraction)', async () => {
+      const testFile = await createTestImage('large.png', 1000, 800);
+      
+      const result = await generateDetailPreview(testFile, {
+        region: { left: 200, top: 200, width: 100, height: 100 },
+      });
+      
+      // Should be exactly 100x100, not scaled
+      expect(result.width).toBe(100);
+      expect(result.height).toBe(100);
+    });
+
+    it('should clamp region to valid bounds', async () => {
+      const testFile = await createTestImage('small.png', 100, 100);
+      
+      // Try to extract beyond image bounds
+      const result = await generateDetailPreview(testFile, {
+        region: { left: 80, top: 80, width: 100, height: 100 },
+      });
+      
+      // Should be clamped to available pixels
+      expect(result.width).toBeLessThanOrEqual(20);
+      expect(result.height).toBeLessThanOrEqual(20);
+    });
+
+    it('should handle region at image origin', async () => {
+      const testFile = await createTestImage('test.png', 200, 150);
+      
+      const result = await generateDetailPreview(testFile, {
+        region: { left: 0, top: 0, width: 100, height: 75 },
+      });
+      
+      expect(result.width).toBe(100);
+      expect(result.height).toBe(75);
+    });
+
+    it('should apply transform before extracting region', async () => {
+      const testFile = await createTestImage('wide.png', 400, 200);
+      
+      const transform: Transform = { rotateSteps: 1, flipH: false, flipV: false };
+      const result = await generateDetailPreview(testFile, {
+        region: { left: 0, top: 0, width: 100, height: 100 },
+        transform,
+      });
+      
+      // After 90° rotation, source is 200x400
+      // Region should work in transformed coordinate space
+      expect(result.width).toBe(100);
+      expect(result.height).toBe(100);
+    });
+
+    it('should throw for invalid image', async () => {
+      const invalidPath = path.join(tempDir, 'nonexistent.png');
+      
+      await expect(generateDetailPreview(invalidPath, {
+        region: { left: 0, top: 0, width: 100, height: 100 },
+      })).rejects.toThrow();
+    });
+  });
+
+  describe('generateDetailPreviewFromBuffer', () => {
+    it('should extract a region at 1:1 from a buffer', async () => {
+      const buffer = await sharp({
+        create: { width: 400, height: 300, channels: 3, background: { r: 100, g: 150, b: 200 } },
+      })
+        .png()
+        .toBuffer();
+      
+      const result = await generateDetailPreviewFromBuffer(buffer, {
+        region: { left: 50, top: 50, width: 100, height: 100 },
+      });
+      
+      expect(result.dataUrl).toMatch(/^data:image\/png;base64,/);
+      expect(result.width).toBe(100);
+      expect(result.height).toBe(100);
+    });
+
+    it('should apply transform to buffer before extraction', async () => {
+      const buffer = await sharp({
+        create: { width: 200, height: 100, channels: 3, background: { r: 255, g: 0, b: 0 } },
+      })
+        .png()
+        .toBuffer();
+      
+      const transform: Transform = { rotateSteps: 1, flipH: false, flipV: false };
+      const result = await generateDetailPreviewFromBuffer(buffer, {
+        region: { left: 0, top: 0, width: 50, height: 50 },
+        transform,
+      });
+      
+      // After 90° rotation, source is 100x200
+      expect(result.width).toBe(50);
+      expect(result.height).toBe(50);
+    });
+
+    it('should clamp region to buffer bounds', async () => {
+      const buffer = await sharp({
+        create: { width: 50, height: 50, channels: 3, background: { r: 0, g: 255, b: 0 } },
+      })
+        .png()
+        .toBuffer();
+      
+      const result = await generateDetailPreviewFromBuffer(buffer, {
+        region: { left: 40, top: 40, width: 100, height: 100 },
+      });
+      
+      // Should be clamped
+      expect(result.width).toBeLessThanOrEqual(10);
+      expect(result.height).toBeLessThanOrEqual(10);
     });
   });
 });

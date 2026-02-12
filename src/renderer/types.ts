@@ -121,6 +121,19 @@ export interface PreviewOptions {
   transform?: Transform;
 }
 
+/** Detail preview result (1:1 region) */
+export interface DetailPreviewResult {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+/** Detail preview options */
+export interface DetailPreviewOptions {
+  region: { left: number; top: number; width: number; height: number };
+  transform?: Transform;
+}
+
 /** Persisted settings type for IPC */
 import type { PersistedSettings } from '../shared/settings';
 import type { RunConfig } from '../shared/types';
@@ -148,6 +161,7 @@ export interface ReformatAPI {
   onRunProgress: (callback: (progress: ExportProgress) => void) => () => void;
   // Preview APIs
   getPreview: (sourcePath: string, options?: PreviewOptions) => Promise<PreviewResult>;
+  getDetailPreview: (sourcePath: string, options: DetailPreviewOptions) => Promise<DetailPreviewResult>;
 }
 
 // Extend the Window interface

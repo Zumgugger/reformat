@@ -107,6 +107,10 @@
                   <div class="crop-handle crop-handle-se" data-handle="se"></div>
                 </div>
               </div>
+              <!-- Lens overlay for 100% detail preview -->
+              <div id="lens-overlay" class="lens-overlay hidden">
+                <div id="lens-rect" class="lens-rect"></div>
+              </div>
             </div>
           </div>
           <div class="transform-controls">
@@ -115,6 +119,13 @@
             <button id="flip-h-btn" class="btn btn-icon" title="Flip horizontal">⇆</button>
             <button id="flip-v-btn" class="btn btn-icon" title="Flip vertical">⇅</button>
             <button id="reset-transform-btn" class="btn btn-small" title="Reset transformations">Reset</button>
+          </div>
+          <!-- Lens toggle control -->
+          <div class="lens-controls">
+            <label class="lens-toggle">
+              <input type="checkbox" id="lens-enabled" />
+              <span>100% Detail</span>
+            </label>
           </div>
           <!-- Crop controls -->
           <div class="crop-controls">
@@ -135,6 +146,24 @@
             </select>
           </div>
           <div id="preview-metadata" class="preview-metadata"></div>
+        </div>
+      </div>
+      
+      <!-- Detail preview panel (100% zoom) -->
+      <div class="main-detail hidden" id="detail-panel-container">
+        <div id="detail-panel" class="detail-panel">
+          <div class="detail-header">
+            <span class="detail-title">100% Detail</span>
+            <span id="detail-info" class="detail-info"></span>
+          </div>
+          <div id="detail-container" class="detail-container">
+            <div id="detail-placeholder" class="detail-placeholder">
+              <span class="detail-placeholder-text">Enable 100% Detail to view</span>
+            </div>
+            <div id="detail-wrapper" class="detail-wrapper hidden">
+              <img id="detail-image" class="detail-image" alt="Detail preview" />
+            </div>
+          </div>
         </div>
       </div>
       

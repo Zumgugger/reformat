@@ -586,22 +586,52 @@ Goal: when crop enabled with multiple files, enforce one-by-one crop & export; n
 Goal: show 1:1 pixel region controlled by a draggable lens.
 
 ### J1. Renderer lens UI
-- [ ] Add lens rectangle overlay on main preview (draggable, clamped)
-- [ ] Add right-side detail preview area sized to match main preview area
+- [x] Add lens rectangle overlay on main preview (draggable, clamped)
+- [x] Add right-side detail preview area sized to match main preview area
 
 ### J2. Main: detail preview generation
-- [ ] Implement IPC that returns cropped 1:1 region as PNG data URL
-- [ ] Avoid scaling above 1:1
+- [x] Implement IPC that returns cropped 1:1 region as PNG data URL
+- [x] Avoid scaling above 1:1
 
 ### J3. Tests
-- [ ] Unit tests for lens coordinate conversions (screen → normalized → pixel crop)
+- [x] Unit tests for lens coordinate conversions (screen → normalized → pixel crop)
+
+### Acceptance
+- [x] 100% detail preview shows 1:1 pixel region controlled by draggable lens
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (642/642 passing)
+- [x] Run full test suite (708/708 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
+
+### Phase J Notes (2026-02-12)
+- Implemented `src/shared/lens.ts` with 57 unit tests:
+  - `createCenteredLens()` - creates centered lens with given dimensions
+  - `calculateLensDimensions()` - calculates lens size for detail panel
+  - `screenToNormalizedLens()` - converts screen coords to normalized
+  - `normalizedToScreenLens()` - converts normalized to screen coords
+  - `normalizedToPixelRegion()` - converts normalized to pixel coords for extraction
+  - `moveLens()`, `clampLensPosition()` - lens movement utilities
+  - `isLensFullCoverage()` - checks if lens covers entire image
+  - `getDetailDimensions()` - returns pixel dimensions of detail region
+- Added `generateDetailPreview()` and `generateDetailPreviewFromBuffer()` in `src/main/preview.ts`:
+  - Extracts region at 1:1 (no scaling)
+  - Applies transform before extraction
+  - Returns PNG data URL for quality
+  - 9 new integration tests
+- Added IPC handler `getDetailPreview` in `src/main/ipc.ts`
+- Added detail preview API to preload bridge
+- Added lens toggle checkbox in preview panel controls
+- Added lens overlay (draggable rectangle) with green accent styling
+- Added detail preview panel on the right side of preview:
+  - Shows when lens is enabled
+  - Displays 1:1 region at original resolution
+  - Uses `image-rendering: pixelated` for crisp pixels
+- Lens automatically initializes when enabled, centered on image
+- Lens recalculates when switching between items
+- Total: 708 passing tests (66 new tests)
 
 ---
 

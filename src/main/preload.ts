@@ -112,6 +112,19 @@ export interface PreviewOptions {
   transform?: Transform;
 }
 
+/** Detail preview result (1:1 region) */
+export interface DetailPreviewResult {
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+/** Detail preview options */
+export interface DetailPreviewOptions {
+  region: { left: number; top: number; width: number; height: number };
+  transform?: Transform;
+}
+
 /** Export progress update */
 export interface ExportProgress {
   runId: string;
@@ -206,6 +219,11 @@ contextBridge.exposeInMainWorld('reformat', {
   // Get preview for an image
   getPreview: async (sourcePath: string, options?: PreviewOptions): Promise<PreviewResult> => {
     return await ipcRenderer.invoke('getPreview', sourcePath, options ?? {});
+  },
+
+  // Get detail preview (1:1 region) for an image
+  getDetailPreview: async (sourcePath: string, options: DetailPreviewOptions): Promise<DetailPreviewResult> => {
+    return await ipcRenderer.invoke('getDetailPreview', sourcePath, options);
   },
 
   // Subscribe to run progress events
