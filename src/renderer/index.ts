@@ -6,8 +6,18 @@
 import './types'; // Import types to extend Window interface
 import { store, formatItemInfo } from './store';
 import { settingsStore } from './settingsStore';
-import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult } from './types';
+import type { ImageItem, OutputFormat, ResizeSettings, RunConfig, ExportProgress, ExportResult, Transform } from './types';
 import { DEFAULT_TRANSFORM, DEFAULT_CROP } from './types';
+import {
+  rotateTransformCW,
+  rotateTransformCCW,
+  flipTransformH,
+  flipTransformV,
+  createIdentityTransform,
+  isIdentityTransform,
+  getTransformedDimensions,
+  transformToCSS,
+} from '../shared/transform';
 
 // DOM Elements
 const dropZone = document.getElementById('drop-zone') as HTMLDivElement;
@@ -42,11 +52,241 @@ const qualityValue = document.getElementById('quality-value') as HTMLSpanElement
 const qualityGroup = document.getElementById('quality-group') as HTMLDivElement;
 const settingsLocked = document.getElementById('settings-locked') as HTMLDivElement;
 
+// Preview DOM Elements
+const previewPanel = document.getElementById('preview-panel') as HTMLDivElement;
+const previewContainer = document.getElementById('preview-container') as HTMLDivElement;
+const previewPlaceholder = document.getElementById('preview-placeholder') as HTMLDivElement;
+const previewImage = document.getElementById('preview-image') as HTMLImageElement;
+const previewInfo = document.getElementById('preview-info') as HTMLSpanElement;
+const previewMetadata = document.getElementById('preview-metadata') as HTMLDivElement;
+const rotateCWBtn = document.getElementById('rotate-cw-btn') as HTMLButtonElement;
+const rotateCCWBtn = document.getElementById('rotate-ccw-btn') as HTMLButtonElement;
+const flipHBtn = document.getElementById('flip-h-btn') as HTMLButtonElement;
+const flipVBtn = document.getElementById('flip-v-btn') as HTMLButtonElement;
+const resetTransformBtn = document.getElementById('reset-transform-btn') as HTMLButtonElement;
+
 // Export state
 let isRunning = false;
 let currentRunId: string | null = null;
 let unsubscribeProgress: (() => void) | null = null;
 const itemStatusMap = new Map<string, string>(); // itemId -> status
+
+// Preview state
+let selectedItemId: string | null = null;
+const itemTransforms = new Map<string, Transform>(); // itemId -> transform
+let isLoadingPreview = false;
+
+/**
+ * Get or create transform for an item.
+ */
+function getItemTransform(itemId: string): Transform {
+  let transform = itemTransforms.get(itemId);
+  if (!transform) {
+    transform = createIdentityTransform();
+    itemTransforms.set(itemId, transform);
+  }
+  return transform;
+}
+
+/**
+ * Set transform for an item.
+ */
+function setItemTransform(itemId: string, transform: Transform): void {
+  itemTransforms.set(itemId, transform);
+}
+
+/**
+ * Select an item for preview.
+ */
+function selectItem(itemId: string | null): void {
+  // Update selection state
+  const previousId = selectedItemId;
+  selectedItemId = itemId;
+
+  // Update visual selection in list
+  if (previousId) {
+    const prevListItem = imageList.querySelector(`[data-id="${previousId}"]`);
+    if (prevListItem) {
+      prevListItem.classList.remove('selected');
+    }
+  }
+
+  if (itemId) {
+    const listItem = imageList.querySelector(`[data-id="${itemId}"]`);
+    if (listItem) {
+      listItem.classList.add('selected');
+    }
+  }
+
+  // Load preview
+  loadPreview();
+}
+
+/**
+ * Load and display preview for selected item.
+ */
+async function loadPreview(): Promise<void> {
+  if (!selectedItemId) {
+    showPreviewPlaceholder();
+    return;
+  }
+
+  const state = store.getState();
+  const item = state.items.find((i) => i.id === selectedItemId);
+  if (!item || !item.sourcePath) {
+    showPreviewPlaceholder();
+    return;
+  }
+
+  // Don't load preview during export
+  if (isRunning) {
+    return;
+  }
+
+  isLoadingPreview = true;
+  setTransformButtonsEnabled(false);
+
+  try {
+    const transform = getItemTransform(item.id);
+    const result = await window.reformat.getPreview(item.sourcePath, {
+      maxSize: 600,
+      transform,
+    });
+
+    // Check if selection changed while loading
+    if (selectedItemId !== item.id) {
+      return;
+    }
+
+    // Display preview
+    previewImage.src = result.dataUrl;
+    previewImage.classList.remove('hidden');
+    previewPlaceholder.classList.add('hidden');
+
+    // Update info
+    const dims = getTransformedDimensions(item.width, item.height, transform);
+    previewInfo.textContent = `${dims.width} × ${dims.height}`;
+
+    // Update metadata
+    renderPreviewMetadata(item, transform);
+  } catch (error) {
+    console.error('Failed to load preview:', error);
+    showPreviewPlaceholder('Failed to load preview');
+  } finally {
+    isLoadingPreview = false;
+    setTransformButtonsEnabled(true);
+  }
+}
+
+/**
+ * Show preview placeholder.
+ */
+function showPreviewPlaceholder(message = 'Select an image to preview'): void {
+  previewImage.classList.add('hidden');
+  previewPlaceholder.classList.remove('hidden');
+  const textEl = previewPlaceholder.querySelector('.preview-placeholder-text');
+  if (textEl) {
+    textEl.textContent = message;
+  }
+  previewInfo.textContent = '';
+  previewMetadata.innerHTML = '';
+}
+
+/**
+ * Render preview metadata.
+ */
+function renderPreviewMetadata(item: ImageItem, transform: Transform): void {
+  const dims = getTransformedDimensions(item.width, item.height, transform);
+  const parts: string[] = [];
+
+  // Dimensions
+  parts.push(`<span><span class="label">Size:</span> <span class="value">${dims.width} × ${dims.height}</span></span>`);
+
+  // Format
+  if (item.format) {
+    parts.push(`<span><span class="label">Format:</span> <span class="value">${item.format.toUpperCase()}</span></span>`);
+  }
+
+  // Transform info
+  if (!isIdentityTransform(transform)) {
+    const transformParts: string[] = [];
+    if (transform.rotateSteps > 0) {
+      transformParts.push(`${transform.rotateSteps * 90}°`);
+    }
+    if (transform.flipH) {
+      transformParts.push('H-flip');
+    }
+    if (transform.flipV) {
+      transformParts.push('V-flip');
+    }
+    parts.push(`<span><span class="label">Transform:</span> <span class="value">${transformParts.join(', ')}</span></span>`);
+  }
+
+  previewMetadata.innerHTML = parts.join('');
+}
+
+/**
+ * Enable/disable transform buttons.
+ */
+function setTransformButtonsEnabled(enabled: boolean): void {
+  const buttons = [rotateCWBtn, rotateCCWBtn, flipHBtn, flipVBtn, resetTransformBtn];
+  buttons.forEach((btn) => {
+    if (btn) btn.disabled = !enabled || !selectedItemId || isRunning;
+  });
+}
+
+/**
+ * Handle rotate clockwise.
+ */
+function handleRotateCW(): void {
+  if (!selectedItemId || isRunning) return;
+  const current = getItemTransform(selectedItemId);
+  const newTransform = rotateTransformCW(current);
+  setItemTransform(selectedItemId, newTransform);
+  loadPreview();
+}
+
+/**
+ * Handle rotate counter-clockwise.
+ */
+function handleRotateCCW(): void {
+  if (!selectedItemId || isRunning) return;
+  const current = getItemTransform(selectedItemId);
+  const newTransform = rotateTransformCCW(current);
+  setItemTransform(selectedItemId, newTransform);
+  loadPreview();
+}
+
+/**
+ * Handle horizontal flip.
+ */
+function handleFlipH(): void {
+  if (!selectedItemId || isRunning) return;
+  const current = getItemTransform(selectedItemId);
+  const newTransform = flipTransformH(current);
+  setItemTransform(selectedItemId, newTransform);
+  loadPreview();
+}
+
+/**
+ * Handle vertical flip.
+ */
+function handleFlipV(): void {
+  if (!selectedItemId || isRunning) return;
+  const current = getItemTransform(selectedItemId);
+  const newTransform = flipTransformV(current);
+  setItemTransform(selectedItemId, newTransform);
+  loadPreview();
+}
+
+/**
+ * Handle reset transform.
+ */
+function handleResetTransform(): void {
+  if (!selectedItemId || isRunning) return;
+  setItemTransform(selectedItemId, createIdentityTransform());
+  loadPreview();
+}
 
 /**
  * Build run config from current settings and items.
@@ -59,7 +299,7 @@ function buildRunConfig(items: ImageItem[]): RunConfig {
     quality: settings.quality,
     items: items.map((item) => ({
       itemId: item.id,
-      transform: DEFAULT_TRANSFORM,
+      transform: getItemTransform(item.id),
       crop: DEFAULT_CROP,
     })),
   };
@@ -78,6 +318,9 @@ function setRunningState(running: boolean): void {
   convertBtn.disabled = running;
   addMoreBtn.disabled = running;
   clearAllBtn.disabled = running;
+  
+  // Update transform buttons
+  setTransformButtonsEnabled(!running);
   
   // Show/hide progress
   progressContainer.classList.toggle('hidden', !running);
@@ -371,6 +614,7 @@ function createListItem(item: ImageItem): HTMLLIElement {
   const li = document.createElement('li');
   li.className = 'image-list-item';
   li.dataset.id = item.id;
+  li.tabIndex = 0; // Make focusable for keyboard navigation
 
   const info = formatItemInfo(item);
 
@@ -381,12 +625,38 @@ function createListItem(item: ImageItem): HTMLLIElement {
     <button class="item-remove" title="Remove">×</button>
   `;
 
+  // Handle click for selection
+  li.addEventListener('click', (e) => {
+    // Don't select if clicking the remove button
+    if ((e.target as HTMLElement).classList.contains('item-remove')) {
+      return;
+    }
+    selectItem(item.id);
+  });
+
+  // Handle keyboard selection
+  li.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      selectItem(item.id);
+    }
+  });
+
   // Handle remove button
   const removeBtn = li.querySelector('.item-remove') as HTMLButtonElement;
   removeBtn.addEventListener('click', (e) => {
     e.stopPropagation();
+    // If this item is selected, clear selection
+    if (selectedItemId === item.id) {
+      selectItem(null);
+    }
     store.removeItems([item.id]);
   });
+
+  // Mark as selected if this is the currently selected item
+  if (selectedItemId === item.id) {
+    li.classList.add('selected');
+  }
 
   return li;
 }
@@ -694,6 +964,7 @@ async function init(): Promise<void> {
   selectFilesBtn.addEventListener('click', handleSelectFiles);
   addMoreBtn.addEventListener('click', handleSelectFiles);
   clearAllBtn.addEventListener('click', () => {
+    selectItem(null); // Clear selection before clearing items
     store.clearItems();
     store.setStatus('Ready');
   });
@@ -704,10 +975,37 @@ async function init(): Promise<void> {
   // Cancel button (with confirmation dialog)
   cancelBtn.addEventListener('click', () => cancelExport());
 
+  // Preview transform buttons
+  if (rotateCWBtn) rotateCWBtn.addEventListener('click', handleRotateCW);
+  if (rotateCCWBtn) rotateCCWBtn.addEventListener('click', handleRotateCCW);
+  if (flipHBtn) flipHBtn.addEventListener('click', handleFlipH);
+  if (flipVBtn) flipVBtn.addEventListener('click', handleFlipV);
+  if (resetTransformBtn) resetTransformBtn.addEventListener('click', handleResetTransform);
+
+  // Initialize preview state
+  setTransformButtonsEnabled(false);
+  showPreviewPlaceholder();
+
   // Subscribe to store changes
   store.subscribe((state, event) => {
     if (event === 'items-added' || event === 'items-removed' || event === 'change') {
       renderImageList();
+      
+      // Handle selection when items change
+      if (event === 'items-added' && state.items.length > 0 && !selectedItemId) {
+        // Auto-select first item when adding to empty list
+        selectItem(state.items[0].id);
+      } else if (event === 'items-removed') {
+        // Check if selected item was removed
+        if (selectedItemId && !state.items.find((i) => i.id === selectedItemId)) {
+          // Select first remaining item if any
+          if (state.items.length > 0) {
+            selectItem(state.items[0].id);
+          } else {
+            selectItem(null);
+          }
+        }
+      }
     }
     if (event === 'status' || event === 'change') {
       renderStatus();

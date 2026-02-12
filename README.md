@@ -12,6 +12,9 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - Concurrent export with progress tracking (concurrency: 4)
 - Cancellation support during batch processing (Cancel button or Esc key)
 - Settings persistence across sessions
+- **Image preview with selection**
+- **Rotate (90° CW/CCW) and flip (horizontal/vertical) transformations**
+- **Per-image transform state preserved during export**
 
 ## Development Setup
 
@@ -53,6 +56,7 @@ src/
   main/          # Electron main process (Node.js)
     import.ts    # File/folder import with validation
     metadata.ts  # Image metadata extraction (sharp)
+    preview.ts   # Preview image generation
     settingsStore.ts  # Settings persistence
     ipc.ts       # IPC handlers
     processor/   # Image processing pipeline
@@ -69,6 +73,7 @@ src/
     bytes.ts     # MiB conversions and formatting
     paths.ts     # Output folder rules
     naming.ts    # Output naming and collision handling
+    transform.ts # Transform utilities (rotate/flip)
     supportedFormats.ts  # Format validation
     dedupe.ts    # Path deduplication
 docs/
@@ -127,11 +132,12 @@ git push origin main
 
 ## Known Limitations
 
-V1 is currently in Phase E (export functionality complete).
+V1 is currently in Phase G (preview and transform functionality complete).
 - Animated GIF/WebP files are rejected
 - Import is non-recursive (subfolders are skipped)
 - Settings are saved to user data directory on change
-- 458 tests passing
+- Crop functionality not yet implemented (planned for Phase H)
+- 532 tests passing
 
 ## License
 

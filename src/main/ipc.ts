@@ -17,7 +17,8 @@ import {
   type ExportResult,
   type CancellationToken,
 } from './processor/exporter';
-import type { ImageItem, RunConfig, ItemResult } from '../shared/types';
+import { generatePreview, type PreviewResult, type PreviewOptions } from './preview';
+import type { ImageItem, RunConfig, ItemResult, Transform } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
 
 /** Result of full import with metadata extraction */
@@ -157,4 +158,34 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('openFolder', async (_event, folderPath: string): Promise<void> => {
     await openFolder(folderPath);
   });
+
+  // === Preview IPC Handlers ===
+
+  // Map of item IDs to their source paths (populated during import)
+  const itemSources = new Map<string, string>();
+
+  // Register item source path (called internally when items are imported)
+  ipcMain.handle(
+    'registerItemSource',
+    async (_event, itemId: string, sourcePath: string): Promise<void> => {
+      itemSources.set(itemId, sourcePath);
+    }
+  );
+
+  // Get preview for an item
+  ipcMain.handle(
+    'getPreview',
+    async (
+      _event,
+      sourcePath: string,
+      options: { maxSize?: number; transform?: Transform }
+    ): Promise<PreviewResult> => {
+      return await generatePreview(sourcePath, {
+        maxSize: options.maxSize ?? 800,
+        transform: options.transform,
+        format: 'jpeg',
+        quality: 80,
+      });
+    }
+  );
 }

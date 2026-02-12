@@ -104,6 +104,21 @@ export interface ExportResult {
   };
 }
 
+/** Preview result */
+export interface PreviewResult {
+  dataUrl: string;
+  width: number;
+  height: number;
+  originalWidth: number;
+  originalHeight: number;
+}
+
+/** Preview options */
+export interface PreviewOptions {
+  maxSize?: number;
+  transform?: Transform;
+}
+
 /** Persisted settings type for IPC */
 import type { PersistedSettings } from '../shared/settings';
 import type { RunConfig } from '../shared/types';
@@ -129,6 +144,8 @@ export interface ReformatAPI {
   cancelRun: (runId: string) => Promise<boolean>;
   openFolder: (folderPath: string) => Promise<void>;
   onRunProgress: (callback: (progress: ExportProgress) => void) => () => void;
+  // Preview APIs
+  getPreview: (sourcePath: string, options?: PreviewOptions) => Promise<PreviewResult>;
 }
 
 // Extend the Window interface

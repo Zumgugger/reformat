@@ -90,6 +90,28 @@ export interface ItemResult {
   warnings?: string[];
 }
 
+/** Transform operations */
+export interface Transform {
+  rotateSteps: 0 | 1 | 2 | 3;
+  flipH: boolean;
+  flipV: boolean;
+}
+
+/** Preview result */
+export interface PreviewResult {
+  dataUrl: string;
+  width: number;
+  height: number;
+  originalWidth: number;
+  originalHeight: number;
+}
+
+/** Preview options */
+export interface PreviewOptions {
+  maxSize?: number;
+  transform?: Transform;
+}
+
 /** Export progress update */
 export interface ExportProgress {
   runId: string;
@@ -177,6 +199,13 @@ contextBridge.exposeInMainWorld('reformat', {
   // Open folder in file explorer
   openFolder: async (folderPath: string): Promise<void> => {
     return await ipcRenderer.invoke('openFolder', folderPath);
+  },
+
+  // === Preview APIs ===
+
+  // Get preview for an image
+  getPreview: async (sourcePath: string, options?: PreviewOptions): Promise<PreviewResult> => {
+    return await ipcRenderer.invoke('getPreview', sourcePath, options ?? {});
   },
 
   // Subscribe to run progress events

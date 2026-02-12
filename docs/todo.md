@@ -411,26 +411,64 @@ Goal: cancel stops remaining work and keeps already-exported files.
 Goal: preview shows active image; rotate/flip stored per item and used in export.
 
 ### G1. Main: preview transport
-- [ ] Implement IPC `getPreview(itemId, maxSize)` returning downscaled image as data URL
-- [ ] Prefer PNG/JPG output; keep payload size bounded
-- [ ] Test preview generation with sharp on a generated image
+- [x] Implement IPC `getPreview(sourcePath, options)` returning downscaled image as data URL
+- [x] Prefer PNG/JPG output; keep payload size bounded
+- [x] Test preview generation with sharp on a generated image
 
 ### G2. Renderer: preview UI
-- [ ] Add preview panel displaying preview + basic metadata
-- [ ] Add rotate/flip buttons
-- [ ] Store per-item transient transform state
-- [ ] Ensure transforms are included in run config per item
+- [x] Add preview panel displaying preview + basic metadata
+- [x] Add rotate/flip buttons
+- [x] Store per-item transient transform state
+- [x] Ensure transforms are included in run config per item
 
 ### G3. Tests
-- [ ] Transform math unit tests
-- [ ] Store tests: transforms apply to correct item
+- [x] Transform math unit tests
+- [x] Store tests: transforms apply to correct item
+
+### Acceptance
+- [x] Preview shows active image with transform applied
+- [x] Rotate/flip buttons update preview in real-time
+- [x] Transforms are included in export run config
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (386/386 passing)
+- [x] Run full test suite (532/532 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
+
+### Phase G Notes (2026-02-12)
+- Implemented `src/main/preview.ts` with 17 integration tests:
+  - `generatePreview(filePath, options)` - creates downscaled JPEG/PNG data URLs
+  - `generatePreviewFromBuffer(buffer, options)` - for clipboard images
+  - Transform support (rotation, flip) applied via sharp
+  - EXIF orientation handling
+  - Bounded preview size (max 800px default)
+- Implemented `src/shared/transform.ts` with 50 unit tests:
+  - `rotateTransformCW()`, `rotateTransformCCW()` - 90° rotation steps
+  - `flipTransformH()`, `flipTransformV()` - flip toggles
+  - `createIdentityTransform()`, `isIdentityTransform()` - identity helpers
+  - `getTransformedDimensions()` - accounts for rotation swapping W/H
+  - `transformToCSS()` - CSS transform string for preview display
+  - `combineTransforms()`, `transformsEqual()`, `cloneTransform()`
+- Added IPC handler `getPreview` in `src/main/ipc.ts`
+- Updated `src/main/preload.ts` with preview API
+- Added preview panel to renderer UI (`src/renderer/index.html`):
+  - Three-panel layout: image list | preview | settings
+  - Preview container with placeholder
+  - Transform controls: rotate CW/CCW, flip H/V, reset
+  - Preview metadata display
+- Updated `src/renderer/index.ts`:
+  - Item selection with click handlers
+  - Per-item transform state (Map<itemId, Transform>)
+  - Preview loading with transform application
+  - Transform button handlers
+  - Auto-select first item when importing
+- Added preview CSS in `src/renderer/styles/main.css`:
+  - Preview panel styling
+  - Transform button styling
+  - Selected item indicator in list
+- Total: 532 passing tests (67 new tests)
 
 ---
 
@@ -649,3 +687,97 @@ Goal: ship installers, bundle sharp correctly, show About info.
 - [x] Commit to git
 - [x] Push to GitHub
 
+---
+
+## SPEC GAPS — Items Missing from Phases (Discovered 2026-02-12)
+
+The following spec requirements were not tracked in the original phase breakdown but must be implemented:
+
+### Gap 1: HEIC Encode Support Detection (specs 4.6, blueprint 1.3)
+**Should have been in Phase D (Settings)**
+- [ ] Implement IPC `getHeicEncodeSupport()` to detect HEIC encode capability at startup
+- [ ] If HEIC unsupported: grey out/disable HEIC option in format dropdown with tooltip
+- [ ] If last-persisted format was HEIC and unsupported: auto-switch to JPG and show warning
+- [ ] Block starting export run with explicit HEIC format if unsupported
+
+### Gap 2: Transparency Auto-Switch (specs 4.6)
+**Should have been in Phase E (Export pipeline)**
+- [ ] In exporter: if `hasAlpha === true` and output format is JPG, auto-switch to PNG for that file
+- [ ] Record warning for auto-switched files
+- [ ] In batch mode: include count of auto-switched items in completion summary
+
+### Gap 3: Upscaling Warning (specs 4.3)
+**Should have been in Phase D (Settings UI) + Phase E (Pipeline)**
+- [ ] Pipeline should ALLOW upscaling (remove `withoutEnlargement: true` behavior)
+- [ ] In renderer: detect when resize settings would upscale any selected image
+- [ ] Show non-blocking warning: "Upscaling reduces perceived quality/sharpness"
+
+### Gap 4: Additional Keyboard Shortcuts (specs 6)
+**Should have been in Phase D (UI Controls)**
+- [ ] Ctrl+O / Cmd+O: trigger "Select files…" dialog
+- [ ] Enter: trigger Convert/Export when idle and files selected
+
+### Gap 5: EXIF/Metadata Preservation (specs 4.7)
+**Should have been in Phase E (Pipeline)**
+- [ ] Call `sharp.withMetadata()` to preserve EXIF/metadata on export
+- [ ] Test: verify EXIF date/camera model preserved after processing
+
+### Gap 6: Failure Tooltip in File List (specs 6)
+**Should have been in Phase E (UI) or Phase F (Cancel)**
+- [ ] For failed items: show failure reason in hover tooltip on the status icon/text
+- [ ] Keep row display clean (no inline error text)
+
+### Gap 7: Default Resize Settings (specs 4.3)
+**Issue discovered in Phase D implementation**
+- Current: DEFAULT_RESIZE_SETTINGS uses `maxSide: 1920`
+- Spec says: "On first launch (no saved settings yet): default is 'no resize' (keep original pixel size unless the user changes settings)"
+- [ ] Change default to represent "no resize" (e.g., pixels mode with undefined dimensions, or a "none" option)
+- [ ] Add UI indication for "Original size" / "No resize" state
+
+### Gap 8: Append Files During In-Progress Run (specs 6)
+**Should have been tested in Phase E**
+- [ ] Verify: "Select files…" during run appends to queue (not replaces)
+- [ ] Verify: dropped files during run append to queue
+- [ ] Appended files use same locked settings
+- [ ] Add renderer store tests for append-during-run behavior
+
+### Gap 9: Processing Row Overlay Progress (specs 6)
+**Should have been in Phase E (UI)**
+- Spec: "Show an overlay progress bar on each row that is currently processing"
+- [ ] Add per-row progress indicator for currently-processing items (not just icons)
+
+### Gap 10: Crop Ratio Preset Persistence (specs 5)
+**Should have been in Phase D (Settings persistence)**
+- Spec: "Persist last-used settings across launches (output format, resize mode, quality, crop ratio preset, etc.)"
+- [ ] Add `cropRatioPreset` to persisted settings schema
+- [ ] Load/save last-used crop ratio preset
+
+---
+
+## Verification Summary (2026-02-12)
+
+**Project state:** 465/465 tests passing. Phases A-F complete.
+
+**Phases G-O:** Not started (as expected per todo.md tracking).
+
+**Implementation matches specs for:**
+- ✅ Basic import pipeline (drag/drop, file picker, folder non-recursive)
+- ✅ Supported format filtering (jpg/png/heic/webp/tiff/bmp)
+- ✅ Dedupe by file path
+- ✅ Metadata extraction (dimensions, file size, hasAlpha)
+- ✅ Settings persistence (output format, resize mode, quality)
+- ✅ Worker pool concurrency=4
+- ✅ Export pipeline (pixels/percent resize, format conversion, quality)
+- ✅ Output folder resolution (single/batch/mixed rules)
+- ✅ Output naming (_reformat suffix, collision handling)
+- ✅ Timestamp preservation (best-effort)
+- ✅ Cancel behavior with Esc shortcut
+- ✅ Matrix-style UI theme
+- ✅ Full path tooltip on filename
+
+**Coordination confirmed between:**
+- specs.md ↔ blueprint.md: Aligned
+- blueprint.md ↔ todo.md: Aligned for tracked phases
+- todo.md ↔ implementation: Aligned for phases A-F
+
+**Action required:** Address Gap 1-10 above before V1 release.

@@ -52,6 +52,30 @@
         </div>
       </div>
       
+      <!-- Center panel: Preview -->
+      <div class="main-center">
+        <div id="preview-panel" class="preview-panel">
+          <div class="preview-header">
+            <span class="preview-title">Preview</span>
+            <span id="preview-info" class="preview-info"></span>
+          </div>
+          <div id="preview-container" class="preview-container">
+            <div id="preview-placeholder" class="preview-placeholder">
+              <span class="preview-placeholder-text">Select an image to preview</span>
+            </div>
+            <img id="preview-image" class="preview-image hidden" alt="Preview" />
+          </div>
+          <div class="transform-controls">
+            <button id="rotate-ccw-btn" class="btn btn-icon" title="Rotate counter-clockwise (90°)">↺</button>
+            <button id="rotate-cw-btn" class="btn btn-icon" title="Rotate clockwise (90°)">↻</button>
+            <button id="flip-h-btn" class="btn btn-icon" title="Flip horizontal">⇆</button>
+            <button id="flip-v-btn" class="btn btn-icon" title="Flip vertical">⇅</button>
+            <button id="reset-transform-btn" class="btn btn-small" title="Reset transformations">Reset</button>
+          </div>
+          <div id="preview-metadata" class="preview-metadata"></div>
+        </div>
+      </div>
+      
       <!-- Right panel: Settings -->
       <div class="main-right">
         <div id="settings-panel" class="settings-panel">
