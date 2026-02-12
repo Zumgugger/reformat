@@ -721,6 +721,25 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Draggable exported items */
+.image-list-item.draggable {
+  cursor: grab;
+}
+
+.image-list-item.draggable:active {
+  cursor: grabbing;
+}
+
+.image-list-item.draggable.completed {
+  opacity: 1;
+}
+
+.image-list-item.draggable.completed .item-name::before {
+  content: '⤵ ';
+  color: var(--color-accent);
+  font-size: 0.9em;
+}
+
 /* ===== Preview Panel ===== */
 
 .main-center {
@@ -1238,4 +1257,42 @@ body {
   object-fit: contain;
   border: 1px solid var(--color-border);
   image-rendering: pixelated; /* Show pixels at 1:1 */
+}
+
+/* ===== Context Menu ===== */
+.context-menu {
+  position: fixed;
+  z-index: 1000;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 4px 0;
+  min-width: 150px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+.context-menu.hidden {
+  display: none;
+}
+
+.context-menu-item {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  text-align: left;
+  background: none;
+  border: none;
+  color: var(--color-text);
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background-color: rgba(0, 255, 65, 0.2);
+  color: var(--color-accent);
+}
+
+.context-menu-item:active {
+  background-color: rgba(0, 255, 65, 0.3);
 }

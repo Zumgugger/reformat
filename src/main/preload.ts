@@ -159,6 +159,22 @@ export interface ExportResult {
   };
 }
 
+/** Result of starting a drag operation */
+export interface StartDragResult {
+  started: boolean;
+  error?: string;
+}
+
+/** Result of a file move operation */
+export interface MoveFileResult {
+  success: boolean;
+  destinationPath?: string;
+  error?: string;
+  warnings?: string[];
+  renamed?: boolean;
+  overwritten?: boolean;
+}
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('reformat', {
   // Test ping
@@ -273,5 +289,37 @@ contextBridge.exposeInMainWorld('reformat', {
   // Clear all clipboard buffers
   clearClipboardBuffers: async (): Promise<void> => {
     return await ipcRenderer.invoke('clearClipboardBuffers');
+  },
+
+  // === Drag-Out APIs ===
+
+  // Start a drag operation for files
+  startDrag: async (filePaths: string[]): Promise<StartDragResult> => {
+    return await ipcRenderer.invoke('startDrag', filePaths);
+  },
+
+  // Check if a file will collide at destination
+  checkCollision: async (destinationPath: string): Promise<boolean> => {
+    return await ipcRenderer.invoke('checkCollision', destinationPath);
+  },
+
+  // Get a suggested rename path for collision resolution
+  getSuggestedRenamePath: async (destinationPath: string): Promise<string> => {
+    return await ipcRenderer.invoke('getSuggestedRenamePath', destinationPath);
+  },
+
+  // Move a file with collision handling
+  moveFile: async (
+    sourcePath: string,
+    destinationPath: string,
+    overwrite: boolean,
+    autoRename: boolean
+  ): Promise<MoveFileResult> => {
+    return await ipcRenderer.invoke('moveFile', sourcePath, destinationPath, overwrite, autoRename);
+  },
+
+  // Show a file in the system file manager
+  showFileInFolder: async (filePath: string): Promise<void> => {
+    return await ipcRenderer.invoke('showFileInFolder', filePath);
   },
 });

@@ -144,6 +144,22 @@ export interface ClipboardPasteResult {
   error?: string;
 }
 
+/** Result of starting a drag operation */
+export interface StartDragResult {
+  started: boolean;
+  error?: string;
+}
+
+/** Result of a file move operation */
+export interface MoveFileResult {
+  success: boolean;
+  destinationPath?: string;
+  error?: string;
+  warnings?: string[];
+  renamed?: boolean;
+  overwritten?: boolean;
+}
+
 /** Persisted settings type for IPC */
 import type { PersistedSettings } from '../shared/settings';
 import type { RunConfig } from '../shared/types';
@@ -178,6 +194,17 @@ export interface ReformatAPI {
   getClipboardDetailPreview: (itemId: string, options: DetailPreviewOptions) => Promise<DetailPreviewResult | null>;
   removeClipboardBuffer: (itemId: string) => Promise<void>;
   clearClipboardBuffers: () => Promise<void>;
+  // Drag-out APIs
+  startDrag: (filePaths: string[]) => Promise<StartDragResult>;
+  checkCollision: (destinationPath: string) => Promise<boolean>;
+  getSuggestedRenamePath: (destinationPath: string) => Promise<string>;
+  moveFile: (
+    sourcePath: string,
+    destinationPath: string,
+    overwrite: boolean,
+    autoRename: boolean
+  ) => Promise<MoveFileResult>;
+  showFileInFolder: (filePath: string) => Promise<void>;
 }
 
 // Extend the Window interface

@@ -121,11 +121,17 @@ const detailWrapper = document.getElementById('detail-wrapper') as HTMLDivElemen
 const detailImage = document.getElementById('detail-image') as HTMLImageElement;
 const detailInfo = document.getElementById('detail-info') as HTMLSpanElement;
 
+// Context menu DOM Elements
+const contextMenu = document.getElementById('context-menu') as HTMLDivElement;
+const ctxShowInFolder = document.getElementById('ctx-show-in-folder') as HTMLButtonElement;
+const ctxCopyPath = document.getElementById('ctx-copy-path') as HTMLButtonElement;
+
 // Export state
 let isRunning = false;
 let currentRunId: string | null = null;
 let unsubscribeProgress: (() => void) | null = null;
 const itemStatusMap = new Map<string, string>(); // itemId -> status
+const itemOutputPaths = new Map<string, string>(); // itemId -> output path (for drag-out)
 
 // Preview state
 let selectedItemId: string | null = null;
@@ -197,6 +203,77 @@ function setItemCrop(itemId: string, crop: Crop): void {
   // Update estimates when crop changes
   if (itemId === selectedItemId) {
     updateEstimates();
+  }
+}
+
+// Context menu state
+let currentContextMenuItemId: string | null = null;
+let currentContextMenuPath: string | null = null;
+
+/**
+ * Show context menu for an exported item.
+ */
+function showExportedItemContextMenu(e: MouseEvent, item: ImageItem, outputPath: string): void {
+  currentContextMenuItemId = item.id;
+  currentContextMenuPath = outputPath;
+  
+  // Position the menu
+  const menuWidth = 150;
+  const menuHeight = 80; // Approximate height
+  
+  let x = e.clientX;
+  let y = e.clientY;
+  
+  // Keep menu within viewport
+  if (x + menuWidth > window.innerWidth) {
+    x = window.innerWidth - menuWidth - 5;
+  }
+  if (y + menuHeight > window.innerHeight) {
+    y = window.innerHeight - menuHeight - 5;
+  }
+  
+  contextMenu.style.left = `${x}px`;
+  contextMenu.style.top = `${y}px`;
+  contextMenu.classList.remove('hidden');
+}
+
+/**
+ * Hide context menu.
+ */
+function hideContextMenu(): void {
+  contextMenu.classList.add('hidden');
+  currentContextMenuItemId = null;
+  currentContextMenuPath = null;
+}
+
+/**
+ * Handle "Show in folder" context menu action.
+ */
+async function handleShowInFolder(): Promise<void> {
+  if (!currentContextMenuPath) return;
+  
+  try {
+    await window.reformat.showFileInFolder(currentContextMenuPath);
+  } catch (error) {
+    console.error('Failed to show in folder:', error);
+  } finally {
+    hideContextMenu();
+  }
+}
+
+/**
+ * Handle "Copy path" context menu action.
+ */
+async function handleCopyPath(): Promise<void> {
+  if (!currentContextMenuPath) return;
+  
+  try {
+    await navigator.clipboard.writeText(currentContextMenuPath);
+    store.setStatus('Path copied to clipboard');
+  } catch (error) {
+    console.error('Failed to copy path:', error);
+  } finally {
+    hideContextMenu();
   }
 }
 
@@ -1161,6 +1238,11 @@ async function processCropQueueCurrentItem(): Promise<void> {
     cropQueueCompletedIds.add(currentItem.id);
     updateItemStatus(currentItem.id, result.results[0]?.status || 'completed');
     
+    // Track output path for drag-out
+    if (result.results[0]?.outputPath) {
+      itemOutputPaths.set(currentItem.id, result.results[0].outputPath);
+    }
+    
     // Update list styles
     renderCropQueueListStyles();
     
@@ -1336,9 +1418,13 @@ function handleRunProgress(progress: ExportProgress): void {
   progressBar.style.width = `${percent}%`;
   progressText.textContent = `${progress.completed} / ${progress.total}`;
   
-  // Update item status
+  // Update item status and output path
   if (progress.latest) {
     updateItemStatus(progress.latest.itemId, progress.latest.status);
+    // Track output path for drag-out
+    if (progress.latest.outputPath) {
+      itemOutputPaths.set(progress.latest.itemId, progress.latest.outputPath);
+    }
   }
 }
 
@@ -1373,10 +1459,17 @@ async function startExport(): Promise<void> {
     
     currentRunId = result.runId;
     
-    // Update final statuses for all items
+    // Update final statuses and output paths for all items
     for (const itemResult of result.results) {
       updateItemStatus(itemResult.itemId, itemResult.status);
+      // Track output path for drag-out
+      if (itemResult.outputPath) {
+        itemOutputPaths.set(itemResult.itemId, itemResult.outputPath);
+      }
     }
+    
+    // Re-render list to enable drag on exported items
+    renderImageList();
     
     // Build status message
     const { summary, outputFolder } = result;
@@ -1560,6 +1653,8 @@ async function handlePaste(): Promise<void> {
         // Clear transform and crop state
         itemTransforms.delete(item.id);
         itemCrops.delete(item.id);
+        // Clear output path for drag-out
+        itemOutputPaths.delete(item.id);
       }
       store.clearItems();
     }
@@ -1676,6 +1771,11 @@ function createListItem(item: ImageItem): HTMLLIElement {
   li.tabIndex = 0; // Make focusable for keyboard navigation
 
   const info = formatItemInfo(item);
+  
+  // Check if this item has been exported (has output path)
+  const outputPath = itemOutputPaths.get(item.id);
+  const status = itemStatusMap.get(item.id);
+  const isExported = status === 'completed' && !!outputPath;
 
   li.innerHTML = `
     <span class="item-name" title="${item.sourcePath || item.originalName}">${info.name}</span>
@@ -1683,6 +1783,36 @@ function createListItem(item: ImageItem): HTMLLIElement {
     <span class="item-size">${info.size}</span>
     <button class="item-remove" title="Remove">×</button>
   `;
+
+  // Add status class if available
+  if (status === 'processing' || status === 'completed' || status === 'failed' || status === 'canceled') {
+    li.classList.add(status);
+  }
+  
+  // Enable drag for exported items
+  if (isExported) {
+    li.draggable = true;
+    li.classList.add('draggable');
+    li.title = `Drag to move file: ${outputPath}`;
+    
+    // Handle drag start
+    li.addEventListener('dragstart', (e) => {
+      e.stopPropagation();
+      
+      // Set drag data
+      if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', outputPath);
+        e.dataTransfer.setData('application/reformat-file', JSON.stringify({
+          itemId: item.id,
+          outputPath,
+        }));
+      }
+      
+      // Start native drag via Electron
+      window.reformat.startDrag([outputPath]).catch(console.error);
+    });
+  }
 
   // Handle click for selection
   li.addEventListener('click', (e) => {
@@ -1721,8 +1851,21 @@ function createListItem(item: ImageItem): HTMLLIElement {
     if (selectedItemId === item.id) {
       selectItem(null);
     }
+    // Clean up state for this item
+    itemTransforms.delete(item.id);
+    itemCrops.delete(item.id);
+    itemStatusMap.delete(item.id);
+    itemOutputPaths.delete(item.id);
     store.removeItems([item.id]);
   });
+  
+  // Context menu for exported items
+  if (isExported) {
+    li.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showExportedItemContextMenu(e, item, outputPath);
+    });
+  }
 
   // Mark as selected if this is the currently selected item
   if (selectedItemId === item.id) {
@@ -2156,6 +2299,11 @@ async function init(): Promise<void> {
   addMoreBtn.addEventListener('click', handleSelectFiles);
   clearAllBtn.addEventListener('click', () => {
     selectItem(null); // Clear selection before clearing items
+    // Clear all item state
+    itemTransforms.clear();
+    itemCrops.clear();
+    itemStatusMap.clear();
+    itemOutputPaths.clear();
     store.clearItems();
     store.setStatus('Ready');
   });
@@ -2219,6 +2367,26 @@ async function init(): Promise<void> {
   }
   document.addEventListener('mousemove', handleLensDragMove);
   document.addEventListener('mouseup', handleLensDragEnd);
+
+  // Context menu handlers
+  if (ctxShowInFolder) {
+    ctxShowInFolder.addEventListener('click', handleShowInFolder);
+  }
+  if (ctxCopyPath) {
+    ctxCopyPath.addEventListener('click', handleCopyPath);
+  }
+  // Hide context menu when clicking elsewhere
+  document.addEventListener('click', (e) => {
+    if (!contextMenu.contains(e.target as Node)) {
+      hideContextMenu();
+    }
+  });
+  // Hide context menu on escape
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      hideContextMenu();
+    }
+  });
 
   // Initialize preview state
   setTransformButtonsEnabled(false);

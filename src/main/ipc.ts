@@ -35,6 +35,15 @@ import {
   clearClipboardBuffers,
   type ClipboardPasteResult,
 } from './clipboard';
+import {
+  startDrag as startFileDrag,
+  moveFile,
+  checkCollision,
+  getSuggestedRenamePath,
+  showFileInFolder,
+  type StartDragResult,
+  type MoveFileResult,
+} from './dragOut';
 import type { ImageItem, RunConfig, ItemResult, Transform } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
 
@@ -299,4 +308,53 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('clearClipboardBuffers', async (): Promise<void> => {
     clearClipboardBuffers();
   });
+
+  // === Drag-Out Export IPC Handlers ===
+
+  // Start a drag operation for a file
+  ipcMain.handle(
+    'startDrag',
+    async (event, filePaths: string[]): Promise<StartDragResult> => {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      return await startFileDrag({ files: filePaths, window });
+    }
+  );
+
+  // Check if a file exists at destination (for collision detection)
+  ipcMain.handle(
+    'checkCollision',
+    async (_event, destinationPath: string): Promise<boolean> => {
+      return await checkCollision(destinationPath);
+    }
+  );
+
+  // Get a suggested rename path for collision resolution
+  ipcMain.handle(
+    'getSuggestedRenamePath',
+    async (_event, destinationPath: string): Promise<string> => {
+      return await getSuggestedRenamePath(destinationPath);
+    }
+  );
+
+  // Move a file with collision handling
+  ipcMain.handle(
+    'moveFile',
+    async (
+      _event,
+      sourcePath: string,
+      destinationPath: string,
+      overwrite: boolean,
+      autoRename: boolean
+    ): Promise<MoveFileResult> => {
+      return await moveFile(sourcePath, destinationPath, overwrite, autoRename);
+    }
+  );
+
+  // Show a file in the system file manager
+  ipcMain.handle(
+    'showFileInFolder',
+    async (_event, filePath: string): Promise<void> => {
+      await showFileInFolder(filePath);
+    }
+  );
 }

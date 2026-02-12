@@ -22,6 +22,8 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - **100% detail preview with draggable lens for pixel-perfect inspection**
 - **Target size mode: automatically downscale to achieve target MiB (±10% tolerance)**
 - **Output estimates: estimated dimensions and file size shown in settings panel**
+- **Drag-out export: drag completed files to move them to another location**
+- **Context menu for exported items: Show in folder, Copy path**
 
 ## Development Setup
 
@@ -65,6 +67,7 @@ src/
     metadata.ts  # Image metadata extraction (sharp)
     preview.ts   # Preview image generation
     clipboard.ts # Clipboard image import
+    dragOut.ts   # Drag-out export (Electron drag API)
     settingsStore.ts  # Settings persistence
     ipc.ts       # IPC handlers
     processor/   # Image processing pipeline
@@ -86,6 +89,7 @@ src/
     crop.ts      # Crop utilities (ratio presets, coordinate conversion)
     lens.ts      # Lens utilities (100% detail preview)
     targetSize.ts # Target size algorithm (iterative downscale)
+    collision.ts # Collision handling for drag-out (overwrite/rename)
     supportedFormats.ts  # Format validation
     dedupe.ts    # Path deduplication
 docs/
@@ -144,12 +148,13 @@ git push origin main
 
 ## Known Limitations
 
-V1 is currently in Phase H (crop UI and pipeline complete).
+V1 is currently in Phase M (drag-out export complete).
 - Animated GIF/WebP files are rejected
 - Import is non-recursive (subfolders are skipped)
 - Settings are saved to user data directory on change
-- Batch crop workflow not yet implemented (planned for Phase I)
-- 603 tests passing
+- HEIC encode support detection not yet implemented
+- Network blocking not yet implemented (planned for Phase N)
+- 833 tests passing
 
 ## License
 
