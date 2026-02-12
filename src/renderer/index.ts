@@ -35,6 +35,11 @@ import {
   isLensFullCoverage,
   type LensPosition,
 } from '../shared/lens';
+import {
+  estimateDimensionsForTarget,
+  estimateFileSize,
+} from '../shared/targetSize';
+import { formatMiB } from '../shared/bytes';
 
 // DOM Elements
 const dropZone = document.getElementById('drop-zone') as HTMLDivElement;
@@ -68,6 +73,12 @@ const qualitySlider = document.getElementById('quality-slider') as HTMLInputElem
 const qualityValue = document.getElementById('quality-value') as HTMLSpanElement;
 const qualityGroup = document.getElementById('quality-group') as HTMLDivElement;
 const settingsLocked = document.getElementById('settings-locked') as HTMLDivElement;
+
+// Estimates DOM Elements
+const estimatesGroup = document.getElementById('estimates-group') as HTMLDivElement;
+const estimateDimensionsEl = document.getElementById('estimate-dimensions') as HTMLSpanElement;
+const estimateFilesizeEl = document.getElementById('estimate-filesize') as HTMLSpanElement;
+const targetEstimateDimensionsEl = document.getElementById('target-estimate-dimensions') as HTMLSpanElement;
 
 // Preview DOM Elements
 const previewPanel = document.getElementById('preview-panel') as HTMLDivElement;
@@ -183,6 +194,10 @@ function getItemCrop(itemId: string): Crop {
  */
 function setItemCrop(itemId: string, crop: Crop): void {
   itemCrops.set(itemId, cloneCrop(crop));
+  // Update estimates when crop changes
+  if (itemId === selectedItemId) {
+    updateEstimates();
+  }
 }
 
 /**
@@ -219,6 +234,9 @@ function selectItem(itemId: string | null): void {
 
   // Load preview
   loadPreview();
+  
+  // Update estimates for selected item
+  updateEstimates();
 }
 
 /**
@@ -891,6 +909,7 @@ function handleRotateCW(): void {
   const newTransform = rotateTransformCW(current);
   setItemTransform(selectedItemId, newTransform);
   loadPreview();
+  updateEstimates();
 }
 
 /**
@@ -902,6 +921,7 @@ function handleRotateCCW(): void {
   const newTransform = rotateTransformCCW(current);
   setItemTransform(selectedItemId, newTransform);
   loadPreview();
+  updateEstimates();
 }
 
 /**
@@ -913,6 +933,7 @@ function handleFlipH(): void {
   const newTransform = flipTransformH(current);
   setItemTransform(selectedItemId, newTransform);
   loadPreview();
+  updateEstimates();
 }
 
 /**
@@ -924,6 +945,7 @@ function handleFlipV(): void {
   const newTransform = flipTransformV(current);
   setItemTransform(selectedItemId, newTransform);
   loadPreview();
+  updateEstimates();
 }
 
 /**
@@ -933,6 +955,7 @@ function handleResetTransform(): void {
   if (!selectedItemId || isRunning) return;
   setItemTransform(selectedItemId, createIdentityTransform());
   loadPreview();
+  updateEstimates();
 }
 
 /**
@@ -1651,6 +1674,123 @@ function updateQualityVisibility(): void {
 }
 
 /**
+ * Update estimates display based on selected item and current settings.
+ */
+function updateEstimates(): void {
+  const selectedItem = selectedItemId ? store.getItem(selectedItemId) : null;
+  
+  if (!selectedItem) {
+    // No item selected - show dashes
+    if (estimateDimensionsEl) estimateDimensionsEl.textContent = '--';
+    if (estimateFilesizeEl) estimateFilesizeEl.textContent = '--';
+    if (targetEstimateDimensionsEl) targetEstimateDimensionsEl.textContent = '--';
+    return;
+  }
+  
+  const settings = settingsStore.getSettings();
+  const transform = itemTransforms.get(selectedItemId!) || DEFAULT_TRANSFORM;
+  const crop = itemCrops.get(selectedItemId!) || DEFAULT_CROP;
+  
+  // Get effective dimensions after transform
+  let { width, height } = getTransformedDimensions(selectedItem.width, selectedItem.height, transform);
+  
+  // Account for crop if active
+  if (isCropActive(crop)) {
+    width = Math.round(width * crop.rect.width);
+    height = Math.round(height * crop.rect.height);
+  }
+  
+  // Calculate estimated output dimensions based on resize mode
+  let outputWidth = width;
+  let outputHeight = height;
+  
+  if (settings.resize.mode === 'pixels') {
+    if (settings.resize.keepRatio) {
+      const driving = settings.resize.driving;
+      let targetDim: number | undefined;
+      
+      if (driving === 'maxSide') {
+        targetDim = settings.resize.maxSide;
+      } else if (driving === 'width') {
+        targetDim = settings.resize.width;
+      } else {
+        targetDim = settings.resize.height;
+      }
+      
+      if (targetDim !== undefined) {
+        if (driving === 'width') {
+          if (width > targetDim) {
+            outputWidth = targetDim;
+            outputHeight = Math.round((targetDim / width) * height);
+          }
+        } else if (driving === 'height') {
+          if (height > targetDim) {
+            outputHeight = targetDim;
+            outputWidth = Math.round((targetDim / height) * width);
+          }
+        } else { // maxSide
+          const maxSide = Math.max(width, height);
+          if (maxSide > targetDim) {
+            const scale = targetDim / maxSide;
+            outputWidth = Math.round(width * scale);
+            outputHeight = Math.round(height * scale);
+          }
+        }
+      }
+    } else {
+      // Exact dimensions
+      if (settings.resize.width) outputWidth = settings.resize.width;
+      if (settings.resize.height) outputHeight = settings.resize.height;
+    }
+  } else if (settings.resize.mode === 'percent') {
+    const scale = settings.resize.percent / 100;
+    outputWidth = Math.round(width * scale);
+    outputHeight = Math.round(height * scale);
+  } else if (settings.resize.mode === 'targetMiB') {
+    // Use targetSize estimation
+    const quality = settingsStore.getEffectiveQuality() || 85;
+    const estimated = estimateDimensionsForTarget(
+      width,
+      height,
+      settings.resize.targetMiB,
+      quality
+    );
+    outputWidth = estimated.width;
+    outputHeight = estimated.height;
+    
+    // Update target-specific estimate
+    if (targetEstimateDimensionsEl) {
+      targetEstimateDimensionsEl.textContent = `~${estimated.width}×${estimated.height}`;
+    }
+  }
+  
+  // Ensure minimum dimensions
+  outputWidth = Math.max(1, outputWidth);
+  outputHeight = Math.max(1, outputHeight);
+  
+  // Update dimension display
+  if (estimateDimensionsEl) {
+    estimateDimensionsEl.textContent = `${outputWidth}×${outputHeight}`;
+  }
+  
+  // Estimate file size (for lossy formats only)
+  const format = settings.outputFormat;
+  const quality = settingsStore.getEffectiveQuality() || 85;
+  
+  if (format === 'jpg' || format === 'webp' || format === 'heic' || format === 'same') {
+    const estimatedBytes = estimateFileSize(outputWidth, outputHeight, quality);
+    if (estimateFilesizeEl) {
+      estimateFilesizeEl.textContent = `~${formatMiB(estimatedBytes)}`;
+    }
+  } else {
+    // PNG, TIFF, BMP - harder to estimate accurately
+    if (estimateFilesizeEl) {
+      estimateFilesizeEl.textContent = 'varies';
+    }
+  }
+}
+
+/**
  * Render settings panel from settings store state.
  */
 function renderSettingsPanel(): void {
@@ -1703,6 +1843,9 @@ function renderSettingsPanel(): void {
   // Locked state
   settingsPanel.classList.toggle('locked', state.locked);
   settingsLocked.classList.toggle('hidden', !state.locked);
+  
+  // Update estimates
+  updateEstimates();
 }
 
 /**

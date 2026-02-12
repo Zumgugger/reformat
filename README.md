@@ -19,6 +19,8 @@ Offline image resizing and reformatting tool built with Electron and TypeScript.
 - **Draggable crop overlay with rule-of-thirds grid**
 - **Batch crop queue: one-by-one crop & export when multiple images have crop enabled**
 - **100% detail preview with draggable lens for pixel-perfect inspection**
+- **Target size mode: automatically downscale to achieve target MiB (±10% tolerance)**
+- **Output estimates: estimated dimensions and file size shown in settings panel**
 
 ## Development Setup
 
@@ -81,6 +83,7 @@ src/
     transform.ts # Transform utilities (rotate/flip)
     crop.ts      # Crop utilities (ratio presets, coordinate conversion)
     lens.ts      # Lens utilities (100% detail preview)
+    targetSize.ts # Target size algorithm (iterative downscale)
     supportedFormats.ts  # Format validation
     dedupe.ts    # Path deduplication
 docs/

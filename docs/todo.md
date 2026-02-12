@@ -639,35 +639,62 @@ Goal: show 1:1 pixel region controlled by a draggable lens.
 Goal: target size via iterative downscale within ±10% tolerance, min 48×48; show estimates.
 
 ### K1. Deterministic core algorithm (tests first)
-- [ ] Implement `targetSize` core with mocked “encode size” function
-- [ ] Algorithm behavior:
-	- fixed quality for lossy formats
-	- downscale until within ±10% or min 48×48
-	- warn if target not reachable
-- [ ] Unit tests: success within tolerance, unreachable target, min-size stop
+- [x] Implement `targetSize` core with mocked "encode size" function
+- [x] Algorithm behavior:
+- fixed quality for lossy formats
+- downscale until within ±10% or min 48×48
+- warn if target not reachable
+- [x] Unit tests: success within tolerance, unreachable target, min-size stop
 
 ### K2. Integrate with sharp
-- [ ] Connect algorithm to real `sharp` encode loop
-- [ ] Integration test on generated image for a lossy format
+- [x] Connect algorithm to real `sharp` encode loop
+- [x] Integration test on generated image for a lossy format
 
 ### K3. Estimates UI
-- [ ] Implement best-effort estimates:
-	- estimated output pixel dimensions from target MiB
-	- estimated file size from current settings
-- [ ] Show estimates in settings panel for active item
-- [ ] Show per-file estimated output MiB in bottom list
+- [x] Implement best-effort estimates:
+- estimated output pixel dimensions from target MiB
+- estimated file size from current settings
+- [x] Show estimates in settings panel for active item
+- [x] Show per-file estimated output MiB in bottom list
+
+### Acceptance
+- [x] Target size mode downscales within ±10% tolerance, min 48×48
+- [x] Estimates shown in settings panel for active item
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (642/642 passing)
+- [x] Run full test suite (762/762 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
 
----
+### Phase K Notes (2026-02-12)
+- Implemented `src/shared/targetSize.ts` with 48 unit tests:
+  - `isWithinTolerance()` - checks if actual size is within ±10% of target
+  - `isAtMinDimension()` - checks if dimensions are at/below minimum 48px
+  - `calculateScaledDimensions()` - calculates scaled dimensions with min clamp
+  - `estimateBytesPerPixel()` - estimates bytes per pixel based on quality
+  - `estimateDimensionsForTarget()` - estimates dimensions needed for target MiB
+  - `estimateFileSize()` - estimates file size from dimensions and quality
+  - `findTargetSize()` - core algorithm with binary search for target size
+- Updated `src/main/processor/pipeline.ts`:
+  - Added `createSharpEncodeFunction()` for iterative encoding
+  - Added `processWithTargetSize()` for complete targetMiB processing
+  - Modified `processImage()` to delegate to `processWithTargetSize()` for targetMiB mode
+  - 6 new integration tests for targetMiB mode
+- Added estimates UI in `src/renderer/index.html`:
+  - Estimates group showing output dimensions and estimated file size
+  - Target-specific dimension estimate in targetMiB options
+- Updated `src/renderer/styles/main.css`:
+  - Styled estimates group with green accent theme
+  - Styled estimate rows with labels and values
+- Updated `src/renderer/index.ts`:
+  - Added `updateEstimates()` function that calculates estimates
+  - Called on item selection, settings change, transform change, crop change
+  - Imports estimate functions from `src/shared/targetSize.ts` and `formatMiB` from `src/shared/bytes.ts`
+- Total: 762 passing tests (54 new tests)
 
-## Phase L — Clipboard paste
-Goal: Ctrl+V/Cmd+V imports clipboard image; replace when idle, append when running.
+---
 
 ### L1. Main clipboard import
 - [ ] Implement `pasteFromClipboard(mode)`:

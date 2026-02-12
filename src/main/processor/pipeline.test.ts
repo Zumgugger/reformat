@@ -770,4 +770,225 @@ describe('pipeline', () => {
       expect(color.b).toBeGreaterThan(50);
     });
   });
+
+  describe('targetMiB resize mode', () => {
+    it('should resize to achieve target MiB within tolerance', async () => {
+      // Create a noisy image that won't compress well
+      const sourcePath = path.join(tempDir, 'large-for-target.jpg');
+      const width = 2000;
+      const height = 1500;
+      
+      // Create a buffer with random noise to prevent excessive compression
+      const channels = 3;
+      const rawPixels = Buffer.alloc(width * height * channels);
+      for (let i = 0; i < rawPixels.length; i++) {
+        rawPixels[i] = Math.floor(Math.random() * 256);
+      }
+      
+      await sharp(rawPixels, {
+        raw: {
+          width,
+          height,
+          channels,
+        },
+      })
+        .jpeg({ quality: 95 })
+        .toFile(sourcePath);
+
+      const outputPath = path.join(tempDir, 'target-mib-output.jpg');
+      const targetMiB = 0.25; // 250 KiB - reasonable target for noisy image
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'targetMiB', targetMiB },
+        quality: DEFAULT_QUALITY,
+        sourceWidth: width,
+        sourceHeight: height,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.outputBytes).toBeDefined();
+
+      // Check that output is within ±10% of target
+      const targetBytes = targetMiB * 1024 * 1024;
+      const lowerBound = targetBytes * 0.9;
+      const upperBound = targetBytes * 1.1;
+      
+      expect(result.outputBytes!).toBeGreaterThanOrEqual(lowerBound);
+      expect(result.outputBytes!).toBeLessThanOrEqual(upperBound);
+
+      // Check that dimensions were reduced
+      expect(result.outputWidth!).toBeLessThan(width);
+      expect(result.outputHeight!).toBeLessThan(height);
+    }, 30000); // Increase timeout for iterative encoding
+
+    it('should not upscale if original is smaller than target', async () => {
+      // Create a small image
+      const sourcePath = path.join(tempDir, 'small-for-target.jpg');
+      await sharp({
+        create: {
+          width: 100,
+          height: 100,
+          channels: 3,
+          background: { r: 100, g: 100, b: 100 },
+        },
+      })
+        .jpeg({ quality: 85 })
+        .toFile(sourcePath);
+
+      const outputPath = path.join(tempDir, 'target-mib-small-output.jpg');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'targetMiB', targetMiB: 10 }, // Much larger than possible
+        quality: DEFAULT_QUALITY,
+        sourceWidth: 100,
+        sourceHeight: 100,
+      });
+
+      expect(result.success).toBe(true);
+      // Should not upscale - dimensions should be unchanged
+      expect(result.outputWidth).toBe(100);
+      expect(result.outputHeight).toBe(100);
+      // Should have a warning about being smaller than target
+      expect(result.warnings.length).toBeGreaterThan(0);
+      expect(result.warnings[0]).toContain('smaller than target');
+    });
+
+    it('should work with WebP format', async () => {
+      const sourcePath = path.join(tempDir, 'webp-target.jpg');
+      await sharp({
+        create: {
+          width: 2000,
+          height: 1500,
+          channels: 3,
+          background: { r: 50, g: 100, b: 150 },
+        },
+      })
+        .jpeg({ quality: 90 })
+        .toFile(sourcePath);
+
+      const outputPath = path.join(tempDir, 'target-mib-webp-output.webp');
+      const targetMiB = 0.2;
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'webp',
+        resize: { mode: 'targetMiB', targetMiB },
+        quality: DEFAULT_QUALITY,
+        sourceWidth: 2000,
+        sourceHeight: 1500,
+      });
+
+      expect(result.success).toBe(true);
+      
+      // Verify it's actually a WebP file
+      const metadata = await sharp(outputPath).metadata();
+      expect(metadata.format).toBe('webp');
+    });
+
+    it('should respect transform when calculating target size', async () => {
+      const sourcePath = path.join(tempDir, 'transform-target.jpg');
+      await sharp({
+        create: {
+          width: 2000,
+          height: 1000, // Landscape
+          channels: 3,
+          background: { r: 100, g: 150, b: 200 },
+        },
+      })
+        .jpeg({ quality: 90 })
+        .toFile(sourcePath);
+
+      const outputPath = path.join(tempDir, 'target-mib-rotated-output.jpg');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'targetMiB', targetMiB: 0.15 },
+        quality: DEFAULT_QUALITY,
+        transform: { rotateSteps: 1, flipH: false, flipV: false }, // 90° rotation
+        sourceWidth: 2000,
+        sourceHeight: 1000,
+      });
+
+      expect(result.success).toBe(true);
+      // After 90° rotation, should be portrait (height > width)
+      expect(result.outputHeight!).toBeGreaterThan(result.outputWidth!);
+    });
+
+    it('should respect crop when calculating target size', async () => {
+      const sourcePath = path.join(tempDir, 'crop-target.jpg');
+      await sharp({
+        create: {
+          width: 2000,
+          height: 2000,
+          channels: 3,
+          background: { r: 200, g: 100, b: 50 },
+        },
+      })
+        .jpeg({ quality: 90 })
+        .toFile(sourcePath);
+
+      const outputPath = path.join(tempDir, 'target-mib-cropped-output.jpg');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'targetMiB', targetMiB: 0.1 },
+        quality: DEFAULT_QUALITY,
+        crop: {
+          active: true,
+          ratioPreset: '16:9',
+          rect: { x: 0, y: 0.25, width: 1, height: 0.5 }, // Horizontal strip
+        },
+        sourceWidth: 2000,
+        sourceHeight: 2000,
+      });
+
+      expect(result.success).toBe(true);
+      // Should maintain 16:9-ish aspect ratio
+      const ratio = result.outputWidth! / result.outputHeight!;
+      expect(ratio).toBeGreaterThan(1.5); // Wider than tall
+    });
+
+    it('should warn when target is unreachable at minimum dimensions', async () => {
+      const sourcePath = path.join(tempDir, 'unreachable-target.jpg');
+      await sharp({
+        create: {
+          width: 500,
+          height: 500,
+          channels: 3,
+          background: { r: 255, g: 255, b: 255 },
+        },
+      })
+        .jpeg({ quality: 90 })
+        .toFile(sourcePath);
+
+      const outputPath = path.join(tempDir, 'target-mib-unreachable-output.jpg');
+
+      const result = await processImage({
+        sourcePath,
+        outputPath,
+        outputFormat: 'jpg',
+        resize: { mode: 'targetMiB', targetMiB: 0.0001 }, // Impossibly small
+        quality: DEFAULT_QUALITY,
+        sourceWidth: 500,
+        sourceHeight: 500,
+      });
+
+      expect(result.success).toBe(true); // Still writes a file
+      expect(result.warnings.length).toBeGreaterThan(0);
+      // Should have hit minimum dimension
+      expect(result.outputWidth).toBeLessThanOrEqual(100);
+      expect(result.outputHeight).toBeLessThanOrEqual(100);
+    });
+  });
 });

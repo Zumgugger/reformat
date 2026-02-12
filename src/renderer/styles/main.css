@@ -491,6 +491,51 @@ body {
   display: none;
 }
 
+/* Estimates display */
+.estimates-group {
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-sm);
+  background-color: rgba(0, 255, 65, 0.05);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+}
+
+.estimates-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+.estimates-icon {
+  font-size: 0.9rem;
+}
+
+.estimates-title {
+  color: var(--color-text);
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
+.estimate-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) 0;
+}
+
+.estimate-label {
+  color: var(--color-text-dim);
+  font-size: 0.8rem;
+}
+
+.estimate-value {
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  font-weight: bold;
+}
+
 /* Settings locked indicator */
 .settings-locked {
   display: flex;

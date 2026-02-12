@@ -1,6 +1,6 @@
 /**
  * Image processing pipeline using sharp.
- * Handles EXIF orientation, resize (pixels/percent), format conversion, and quality.
+ * Handles EXIF orientation, resize (pixels/percent/targetMiB), format conversion, and quality.
  */
 
 import sharp from 'sharp';
@@ -12,6 +12,11 @@ import type {
   Crop,
 } from '../../shared/types';
 import { normalizedToPixelCrop, isCropActive } from '../../shared/crop';
+import {
+  findTargetSize,
+  type TargetSizeResult,
+  type TargetSizeOptions,
+} from '../../shared/targetSize';
 
 /** Options for processing a single image */
 export interface ProcessOptions {
@@ -309,6 +314,22 @@ export function applyCrop(
  * @returns Processing result
  */
 export async function processImage(options: ProcessOptions): Promise<ProcessResult> {
+  // Handle targetMiB mode separately - it uses iterative encoding
+  if (options.resize.mode === 'targetMiB') {
+    return processWithTargetSize(
+      options.sourcePath,
+      options.outputPath,
+      options.resize.targetMiB,
+      {
+        outputFormat: options.outputFormat,
+        quality: options.quality,
+        transform: options.transform,
+        crop: options.crop,
+        sourceFormat: options.sourceFormat,
+      }
+    );
+  }
+  
   const warnings: string[] = [];
   
   try {
@@ -424,5 +445,200 @@ export function formatSupportsQuality(format: OutputFormat | 'jpeg' | 'png' | 'w
       return true;
     default:
       return false;
+  }
+}
+
+/**
+ * Create a sharp encode function for target size calculation.
+ * Takes a base sharp image and returns a function that encodes at different sizes.
+ */
+export function createSharpEncodeFunction(
+  sourceBuffer: Buffer,
+  targetFormat: 'jpeg' | 'png' | 'webp' | 'tiff' | 'heif' | 'raw' | null,
+  transform?: Transform,
+  crop?: Crop
+): (width: number, height: number, quality: number) => Promise<number> {
+  return async (width: number, height: number, quality: number): Promise<number> => {
+    // Create fresh instance for each encode attempt
+    let image = sharp(sourceBuffer).rotate();
+    
+    // Apply transform
+    image = applyTransform(image, transform);
+    
+    // Get metadata to track dimensions
+    const meta = await image.metadata();
+    let currentWidth = meta.width ?? 0;
+    let currentHeight = meta.height ?? 0;
+    
+    // Swap dimensions if rotated 90 or 270 degrees
+    if (transform?.rotateSteps === 1 || transform?.rotateSteps === 3) {
+      [currentWidth, currentHeight] = [currentHeight, currentWidth];
+    }
+    
+    // Apply crop if active
+    if (isCropActive(crop)) {
+      image = applyCrop(image, crop, currentWidth, currentHeight);
+    }
+    
+    // Resize to target dimensions
+    image = image.resize(width, height, {
+      fit: 'fill',
+      withoutEnlargement: false,
+    });
+    
+    // Convert to sRGB
+    image = image.toColorspace('srgb');
+    
+    // Apply format-specific encoding
+    if (targetFormat === 'jpeg') {
+      image = image.jpeg({ quality, mozjpeg: true });
+    } else if (targetFormat === 'png') {
+      image = image.png({ compressionLevel: 9 });
+    } else if (targetFormat === 'webp') {
+      image = image.webp({ quality });
+    } else if (targetFormat === 'tiff') {
+      image = image.tiff({ compression: 'lzw' });
+    } else if (targetFormat === 'heif') {
+      image = image.heif({ quality });
+    } else {
+      // Default to JPEG for targetMiB (lossy makes most sense)
+      image = image.jpeg({ quality, mozjpeg: true });
+    }
+    
+    // Encode to buffer and return size
+    const buffer = await image.toBuffer();
+    return buffer.length;
+  };
+}
+
+/**
+ * Process an image with targetMiB resize mode.
+ * Returns the dimensions and bytes achieved.
+ */
+export async function processWithTargetSize(
+  sourcePath: string,
+  outputPath: string,
+  targetMiB: number,
+  options: {
+    outputFormat: OutputFormat;
+    quality: QualitySettings;
+    transform?: Transform;
+    crop?: Crop;
+    sourceFormat?: string;
+  }
+): Promise<ProcessResult> {
+  const warnings: string[] = [];
+  
+  try {
+    // Read source file into buffer for multiple encode attempts
+    const sourceBuffer = await sharp(sourcePath).rotate().toBuffer();
+    
+    // Get metadata
+    const metadata = await sharp(sourceBuffer).metadata();
+    let sourceWidth = metadata.width ?? 0;
+    let sourceHeight = metadata.height ?? 0;
+    
+    // Account for transform
+    if (options.transform?.rotateSteps === 1 || options.transform?.rotateSteps === 3) {
+      [sourceWidth, sourceHeight] = [sourceHeight, sourceWidth];
+    }
+    
+    // Account for crop
+    if (isCropActive(options.crop)) {
+      const pixelCrop = normalizedToPixelCrop(options.crop!.rect, sourceWidth, sourceHeight);
+      sourceWidth = pixelCrop.width;
+      sourceHeight = pixelCrop.height;
+    }
+    
+    // Determine format and quality
+    const targetFormat = getSharpFormat(options.outputFormat, options.sourceFormat);
+    const qualityValue = getQualityForFormat(targetFormat, options.quality);
+    
+    // Create encode function
+    const encodeSize = createSharpEncodeFunction(
+      sourceBuffer,
+      targetFormat,
+      options.transform,
+      options.crop
+    );
+    
+    // Run target size algorithm
+    const targetSizeOptions: TargetSizeOptions = {
+      sourceWidth,
+      sourceHeight,
+      targetMiB,
+      quality: qualityValue,
+    };
+    
+    const result: TargetSizeResult = await findTargetSize(targetSizeOptions, encodeSize);
+    
+    if (result.warning) {
+      warnings.push(result.warning);
+    }
+    
+    // Now do the final encode at the determined dimensions
+    let finalImage = sharp(sourceBuffer).rotate();
+    
+    // Apply transform
+    finalImage = applyTransform(finalImage, options.transform);
+    
+    // Get dimensions after transform for crop
+    let currentWidth = metadata.width ?? 0;
+    let currentHeight = metadata.height ?? 0;
+    if (options.transform?.rotateSteps === 1 || options.transform?.rotateSteps === 3) {
+      [currentWidth, currentHeight] = [currentHeight, currentWidth];
+    }
+    
+    // Apply crop
+    if (isCropActive(options.crop)) {
+      finalImage = applyCrop(finalImage, options.crop, currentWidth, currentHeight);
+    }
+    
+    // Resize to final dimensions
+    finalImage = finalImage.resize(result.width, result.height, {
+      fit: 'fill',
+      withoutEnlargement: false,
+    });
+    
+    // Convert to sRGB
+    finalImage = finalImage.toColorspace('srgb');
+    
+    // Apply format-specific encoding
+    if (targetFormat === 'jpeg') {
+      finalImage = finalImage.jpeg({ quality: qualityValue, mozjpeg: true });
+    } else if (targetFormat === 'png') {
+      finalImage = finalImage.png({ compressionLevel: 9 });
+    } else if (targetFormat === 'webp') {
+      finalImage = finalImage.webp({ quality: qualityValue });
+    } else if (targetFormat === 'tiff') {
+      finalImage = finalImage.tiff({ compression: 'lzw' });
+    } else if (targetFormat === 'heif') {
+      finalImage = finalImage.heif({ quality: qualityValue });
+    } else if (targetFormat === 'raw') {
+      finalImage = finalImage.png();
+      warnings.push('BMP output not fully supported; saved as PNG');
+    } else {
+      // Default to JPEG for targetMiB
+      finalImage = finalImage.jpeg({ quality: qualityValue, mozjpeg: true });
+    }
+    
+    // Write to file
+    const outputInfo = await finalImage.toFile(outputPath);
+    
+    return {
+      success: true,
+      outputPath,
+      outputBytes: outputInfo.size,
+      outputWidth: outputInfo.width,
+      outputHeight: outputInfo.height,
+      warnings,
+    };
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      error: errorMessage,
+      warnings,
+    };
   }
 }
