@@ -160,6 +160,13 @@ export interface MoveFileResult {
   overwritten?: boolean;
 }
 
+/** App info for About dialog */
+export interface AppInfo {
+  name: string;
+  version: string;
+  buildDate: string;
+}
+
 /** Persisted settings type for IPC */
 import type { PersistedSettings } from '../shared/settings';
 import type { RunConfig } from '../shared/types';
@@ -205,6 +212,8 @@ export interface ReformatAPI {
     autoRename: boolean
   ) => Promise<MoveFileResult>;
   showFileInFolder: (filePath: string) => Promise<void>;
+  // About API
+  getAppInfo: () => Promise<AppInfo>;
 }
 
 // Extend the Window interface

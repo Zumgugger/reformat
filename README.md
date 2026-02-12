@@ -112,6 +112,57 @@ docs/
 - `npm run build:renderer` - Build only the renderer
 - `npm run dev` - Start development mode with hot reload
 - `npm start` - Start the built application
+- `npm run dist` - Build and package for all platforms
+- `npm run dist:win` - Build and package for Windows (NSIS installer)
+- `npm run dist:mac` - Build and package for macOS (DMG)
+- `npm run dist:linux` - Build and package for Linux (AppImage)
+
+## Packaging / Distribution
+
+The application uses electron-builder for packaging. Build artifacts are placed in the `release/` directory.
+
+### Windows
+```bash
+npm run dist:win
+```
+Creates:
+- `release/win-unpacked/` - Unpacked application directory
+- `release/Reformat Setup X.Y.Z.exe` - NSIS installer (requires Wine when building from Linux/WSL)
+
+### macOS
+```bash
+npm run dist:mac
+```
+Creates:
+- `release/mac-arm64/` or `release/mac-x64/` - Unpacked application
+- `release/Reformat-X.Y.Z.dmg` - DMG installer
+
+### Linux
+```bash
+npm run dist:linux
+```
+Creates:
+- `release/Reformat-X.Y.Z.AppImage` - AppImage executable
+
+### Cross-Platform Building Notes
+- Building Windows NSIS installer from Linux/WSL requires Wine
+- Building macOS DMG from non-macOS requires additional setup
+- For full cross-platform builds, use CI/CD or build on native platforms
+
+### Custom Icons (Optional)
+Place icons in the `build/` directory:
+- `icon.ico` - Windows (256x256 or larger)
+- `icon.icns` - macOS (512x512 or larger)
+- `icon.png` - Linux (512x512 or larger)
+
+## About Dialog
+
+The application includes an About dialog accessible via:
+- **Windows/Linux**: Help menu → About Reformat
+- **macOS**: Application menu → About Reformat
+- **UI**: Click "About" button in the footer
+
+Shows app name, version, and build date.
 
 ## Platform Support
 
@@ -153,13 +204,15 @@ git push origin main
 
 ## Known Limitations
 
-V1 is currently in Phase N (hardening complete).
+V1 is complete through Phase O (packaging).
 - Animated GIF/WebP files are rejected
 - Import is non-recursive (subfolders are skipped)
 - Settings are saved to user data directory on change
-- HEIC encode support detection not yet implemented
+- HEIC encode support detection not yet implemented (Gap 1)
+- Transparency auto-switch not yet implemented (Gap 2)
 - Network blocking is disabled in development mode (to allow Vite dev server)
-- 866 tests passing
+- Cross-platform installer builds may require native platform or additional tools (Wine for Windows from Linux)
+- 880 tests passing
 
 ## License
 

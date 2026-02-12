@@ -175,6 +175,13 @@ export interface MoveFileResult {
   overwritten?: boolean;
 }
 
+/** App info for About dialog */
+export interface AppInfo {
+  name: string;
+  version: string;
+  buildDate: string;
+}
+
 // Expose the API to the renderer process
 contextBridge.exposeInMainWorld('reformat', {
   // Test ping
@@ -321,5 +328,12 @@ contextBridge.exposeInMainWorld('reformat', {
   // Show a file in the system file manager
   showFileInFolder: async (filePath: string): Promise<void> => {
     return await ipcRenderer.invoke('showFileInFolder', filePath);
+  },
+
+  // === About API ===
+
+  // Get app info (version, build date)
+  getAppInfo: async (): Promise<AppInfo> => {
+    return await ipcRenderer.invoke('getAppInfo');
   },
 });

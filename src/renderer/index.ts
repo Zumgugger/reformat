@@ -126,6 +126,15 @@ const contextMenu = document.getElementById('context-menu') as HTMLDivElement;
 const ctxShowInFolder = document.getElementById('ctx-show-in-folder') as HTMLButtonElement;
 const ctxCopyPath = document.getElementById('ctx-copy-path') as HTMLButtonElement;
 
+// About modal DOM Elements
+const aboutModal = document.getElementById('about-modal') as HTMLDivElement;
+const aboutModalBackdrop = aboutModal?.querySelector('.modal-backdrop') as HTMLDivElement;
+const aboutAppName = document.getElementById('about-app-name') as HTMLHeadingElement;
+const aboutVersion = document.getElementById('about-version') as HTMLSpanElement;
+const aboutBuildDate = document.getElementById('about-build-date') as HTMLSpanElement;
+const aboutCloseBtn = document.getElementById('about-close-btn') as HTMLButtonElement;
+const aboutBtn = document.getElementById('about-btn') as HTMLButtonElement;
+
 // Export state
 let isRunning = false;
 let currentRunId: string | null = null;
@@ -275,6 +284,34 @@ async function handleCopyPath(): Promise<void> {
   } finally {
     hideContextMenu();
   }
+}
+
+/**
+ * Show the About modal and load app info.
+ */
+async function showAboutModal(): Promise<void> {
+  if (!aboutModal) return;
+  
+  try {
+    const info = await window.reformat.getAppInfo();
+    if (aboutAppName) aboutAppName.textContent = info.name;
+    if (aboutVersion) aboutVersion.textContent = info.version;
+    if (aboutBuildDate) aboutBuildDate.textContent = info.buildDate;
+  } catch (error) {
+    console.error('Failed to load app info:', error);
+    if (aboutVersion) aboutVersion.textContent = '1.0.0';
+    if (aboutBuildDate) aboutBuildDate.textContent = 'Unknown';
+  }
+  
+  aboutModal.classList.remove('hidden');
+}
+
+/**
+ * Hide the About modal.
+ */
+function hideAboutModal(): void {
+  if (!aboutModal) return;
+  aboutModal.classList.add('hidden');
 }
 
 /**
@@ -1534,9 +1571,14 @@ async function cancelExport(skipConfirm = false): Promise<void> {
  * Handle keyboard shortcuts.
  */
 function handleKeyDown(event: KeyboardEvent): void {
-  // Esc key to cancel
+  // Esc key to close modals or cancel
   if (event.key === 'Escape') {
     event.preventDefault();
+    // Close About modal if open
+    if (aboutModal && !aboutModal.classList.contains('hidden')) {
+      hideAboutModal();
+      return;
+    }
     if (isInCropQueueMode) {
       cancelCropQueue();
     } else if (isRunning) {
@@ -2375,6 +2417,18 @@ async function init(): Promise<void> {
   if (ctxCopyPath) {
     ctxCopyPath.addEventListener('click', handleCopyPath);
   }
+
+  // About modal handlers
+  if (aboutBtn) {
+    aboutBtn.addEventListener('click', showAboutModal);
+  }
+  if (aboutCloseBtn) {
+    aboutCloseBtn.addEventListener('click', hideAboutModal);
+  }
+  if (aboutModalBackdrop) {
+    aboutModalBackdrop.addEventListener('click', hideAboutModal);
+  }
+
   // Hide context menu when clicking elsewhere
   document.addEventListener('click', (e) => {
     if (!contextMenu.contains(e.target as Node)) {

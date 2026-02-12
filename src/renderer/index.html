@@ -286,9 +286,28 @@
       <button class="context-menu-item" id="ctx-copy-path">Copy path</button>
     </div>
     
+    <!-- About modal -->
+    <div id="about-modal" class="modal hidden">
+      <div class="modal-backdrop"></div>
+      <div class="modal-content">
+        <h2 class="modal-title" id="about-app-name">Reformat</h2>
+        <div class="modal-body">
+          <p><strong>Version:</strong> <span id="about-version">1.0.0</span></p>
+          <p><strong>Build Date:</strong> <span id="about-build-date">--</span></p>
+          <p class="about-description">Offline image resizing and reformatting tool.</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-primary" id="about-close-btn">OK</button>
+        </div>
+      </div>
+    </div>
+    
     <footer class="app-footer">
       <div class="status" id="status">Ready</div>
-      <div class="warnings" id="warnings"></div>
+      <div class="footer-right">
+        <button class="btn btn-link" id="about-btn">About</button>
+        <div class="warnings" id="warnings"></div>
+      </div>
     </footer>
   </div>
   <script type="module" src="./index.ts"></script>

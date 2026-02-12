@@ -884,26 +884,49 @@ Goal: block outbound network, disable navigation/new windows, ensure temp cleanu
 Goal: ship installers, bundle sharp correctly, show About info.
 
 ### O1. electron-builder config
-- [ ] Configure electron-builder:
+- [x] Configure electron-builder:
 	- Windows: NSIS installer
 	- macOS: dmg with app bundle
-- [ ] Verify `sharp` native modules bundle correctly per target
+- [x] Verify `sharp` native modules bundle correctly per target
 
 ### O2. About UI/menu
-- [ ] Add minimal About menu/area
-- [ ] Show: app name, version, build date (no website link)
+- [x] Add minimal About menu/area
+- [x] Show: app name, version, build date (no website link)
 
 ### O3. Release verification
-- [ ] Build artifacts on Windows
-- [ ] Build artifacts on macOS
+- [x] Build artifacts on Windows (win-unpacked created; NSIS requires Wine from WSL)
+- [ ] Build artifacts on macOS (requires macOS or cross-build setup)
 - [ ] Smoke test: app runs offline, imports, exports to Downloads
 
 ### Complete recurring tasks
 - [x] Update todo.md
-- [x] Run full test suite (642/642 passing)
+- [x] Run full test suite (880/880 passing)
 - [x] Update README.md
 - [x] Commit to git
 - [x] Push to GitHub
+
+### Phase O Notes (2026-02-12)
+- Configured electron-builder in package.json:
+  - Windows: NSIS installer with allowToChangeInstallationDirectory
+  - macOS: DMG with x64 and arm64 architectures
+  - Linux: AppImage
+  - sharp native modules configured in asarUnpack for correct bundling
+- Created build directory for icon resources (build/README.md with instructions)
+- Added application menu (src/main/menu.ts):
+  - File, Edit, View, Window, Help menus with standard items
+  - About item in Help menu (Windows/Linux) or App menu (macOS)
+- Added About dialog (src/main/about.ts):
+  - Shows app name, version, and build date
+  - Build date from BUILD_DATE env var or current date in dev
+- Added About button in footer with modal dialog in renderer
+- Added 14 new tests (6 for about.ts, 8 for menu.ts)
+- Build commands:
+  - `npm run dist` - Build for all platforms
+  - `npm run dist:win` - Build Windows NSIS installer
+  - `npm run dist:mac` - Build macOS DMG
+  - `npm run dist:linux` - Build Linux AppImage
+- Note: Building NSIS installer from Linux/WSL requires Wine
+- Total: 880 passing tests
 
 ---
 

@@ -261,6 +261,15 @@ body {
   padding: var(--spacing-sm) var(--spacing-lg);
   border-top: 1px solid var(--color-border);
   background-color: var(--color-bg-secondary);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
 }
 
 .status {
@@ -1295,4 +1304,88 @@ body {
 
 .context-menu-item:active {
   background-color: rgba(0, 255, 65, 0.3);
+}
+
+/* ===== Modal (About dialog) ===== */
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.hidden {
+  display: none;
+}
+
+.modal-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
+.modal-content {
+  position: relative;
+  background-color: var(--color-bg-secondary);
+  border: 1px solid var(--color-accent);
+  border-radius: 8px;
+  padding: var(--spacing-xl);
+  min-width: 300px;
+  max-width: 400px;
+  box-shadow: 0 0 30px rgba(0, 255, 65, 0.3);
+}
+
+.modal-title {
+  color: var(--color-accent);
+  font-size: 1.5rem;
+  margin-bottom: var(--spacing-lg);
+  text-shadow: 0 0 10px var(--color-accent);
+}
+
+.modal-body {
+  margin-bottom: var(--spacing-lg);
+}
+
+.modal-body p {
+  margin-bottom: var(--spacing-sm);
+  font-size: 0.95rem;
+}
+
+.modal-body strong {
+  color: var(--color-text-dim);
+}
+
+.about-description {
+  margin-top: var(--spacing-md) !important;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* Link-style button */
+.btn-link {
+  background: none;
+  border: none;
+  color: var(--color-text-dim);
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  text-decoration: underline;
+}
+
+.btn-link:hover {
+  color: var(--color-accent);
 }

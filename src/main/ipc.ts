@@ -44,6 +44,7 @@ import {
   type StartDragResult,
   type MoveFileResult,
 } from './dragOut';
+import { getAppInfo, type AppInfo } from './about';
 import type { ImageItem, RunConfig, ItemResult, Transform } from '../shared/types';
 import type { PersistedSettings } from '../shared/settings';
 
@@ -357,4 +358,11 @@ export function registerIpcHandlers(): void {
       await showFileInFolder(filePath);
     }
   );
+
+  // === About IPC Handler ===
+
+  // Get app info (version, build date)
+  ipcMain.handle('getAppInfo', async (): Promise<AppInfo> => {
+    return getAppInfo();
+  });
 }

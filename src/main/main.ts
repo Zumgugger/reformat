@@ -3,6 +3,7 @@ import path from 'path';
 import { registerIpcHandlers } from './ipc';
 import { applySecurity, applyWindowSecurity } from './security';
 import { cleanupTempFiles } from './cleanup';
+import { setupApplicationMenu } from './menu';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -44,6 +45,9 @@ app.whenReady().then(async () => {
 
   // Clean up any leftover temp files from previous sessions
   await cleanupTempFiles();
+
+  // Setup application menu (including About)
+  setupApplicationMenu();
 
   registerIpcHandlers();
   createWindow();
