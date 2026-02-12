@@ -334,7 +334,7 @@ Goal: click Convert/Export runs processing for all items with concurrency 4.
 - [x] Commit to git
 - [x] Push to GitHub
 
-### Phase E Notes (2025-01-18)
+### Phase E Notes (2026-02-12)
 - Implemented `src/main/processor/workerPool.ts` with 22 unit tests:
   - Fixed concurrency of 4 (configurable)
   - Cancellation token support with proper task cleanup
