@@ -97,37 +97,60 @@ Goal: project boots, tests run, and a minimal window appears.
 Goal: implement pure logic early with thorough unit tests.
 
 ### B1. Shared domain types
-- [ ] Create `src/shared/types.ts` with stable domain types:
+- [x] Create `src/shared/types.ts` with stable domain types:
 	- `ImageItem`, `Transform`, `Crop`, `ResizeMode`, `ResizeSettings`, `OutputFormat`, `RunConfig`
-- [ ] Ensure shared types contain only serializable values (IPC-safe)
+- [x] Ensure shared types contain only serializable values (IPC-safe)
 
 ### B2. MiB conversions and formatting
-- [ ] Implement `src/shared/bytes.ts`:
+- [x] Implement `src/shared/bytes.ts`:
 	- MiB definition: `1 MiB = 1,048,576 bytes`
 	- Format with 1 decimal (e.g. `2.3 MiB`)
-- [ ] Add Vitest unit tests: rounding, 0 bytes, large values, edge rounding boundaries
+- [x] Add Vitest unit tests: rounding, 0 bytes, large values, edge rounding boundaries
 
 ### B3. Output folder rules (pure)
-- [ ] Implement `src/shared/paths.ts` (pure function):
+- [x] Implement `src/shared/paths.ts` (pure function):
 	- single file → Downloads root
 	- batch from one source folder → `Downloads/<source-folder-name>/`
 	- mixed source folders → `Downloads/Reformat/`
 	- clipboard during a run → same destination as that run
-- [ ] Add tests using fake paths (no OS APIs)
+- [x] Add tests using fake paths (no OS APIs)
 
 ### B4. Output naming rules + collisions (pure)
-- [ ] Implement `src/shared/naming.ts`:
+- [x] Implement `src/shared/naming.ts`:
 	- minimal filename sanitization (Windows/macOS illegal chars)
 	- always append `_reformat`
 	- collision suffix: `-1`, `-2`, ...
 	- injectable async `exists(path)` for testability
-- [ ] Add unit tests: sanitization cases, extension preservation, collision loop behavior
+- [x] Add unit tests: sanitization cases, extension preservation, collision loop behavior
 
 ### Acceptance
-- [ ] Shared logic is well-covered by unit tests (focus on edge cases)
+- [x] Shared logic is well-covered by unit tests (focus on edge cases)
 
 ### Complete recurring tasks
-- [ ] Complete recurring meta tasks
+- [x] Update todo.md
+- [x] Run full test suite (97/97 passing)
+- [x] Update README.md
+- [x] Commit to git (commit 5533b2f)
+- [x] Push to GitHub
+
+### Phase B Notes (2026-02-12)
+- Implemented complete domain types in `src/shared/types.ts`:
+  - `ImageItem`, `Transform`, `Crop`, `CropRect`, `CropRatioPreset`
+  - `ResizeMode`, `ResizeSettings` (pixels/percent/targetMiB variants)
+  - `OutputFormat`, `QualitySettings`, `RunConfig`, `ItemRunConfig`
+  - `ItemStatus`, `ItemResult` for run tracking
+  - Default constants: `DEFAULT_TRANSFORM`, `DEFAULT_CROP`, `DEFAULT_QUALITY`
+- Implemented `src/shared/bytes.ts` with 27 unit tests:
+  - `bytesToMiB()`, `mibToBytes()`, `formatMiB()`, `parseMiBString()`
+- Implemented `src/shared/paths.ts` with 31 unit tests:
+  - `resolveOutputSubfolder()` - handles single/batch/mixed/clipboard rules
+  - `buildOutputFolderPath()` - constructs full output folder paths
+- Implemented `src/shared/naming.ts` with 36 unit tests:
+  - `sanitizeFilename()` - Windows/macOS illegal chars, reserved names
+  - `buildOutputFilename()` - appends `_reformat` suffix
+  - `resolveUniqueFilename()` - collision handling with `-1`, `-2`, etc.
+  - `resolveOutputPath()` - complete output path resolution
+- Total: 97 passing tests
 
 ---
 

@@ -96,7 +96,7 @@ git push origin main
 
 ## Known Limitations
 
-V1 is currently in Phase A (scaffold + basic setup).
+V1 is currently in Phase B (shared domain + deterministic output rules).
 
 ## License
 
