@@ -863,8 +863,22 @@ function initializeLensForItem(): void {
     } else if (resizeSettings.driving === 'height' && resizeSettings.height) {
       resizeScale = dims.height / resizeSettings.height;
     }
+  } else if (resizeSettings.mode === 'targetMiB') {
+    // Use estimated dimensions for target MiB mode
+    const quality = settingsStore.getEffectiveQuality() || 85;
+    const estimated = estimateDimensionsForTarget(
+      dims.width,
+      dims.height,
+      resizeSettings.targetMiB,
+      quality
+    );
+    // Scale is ratio of original to estimated output
+    const maxOriginal = Math.max(dims.width, dims.height);
+    const maxEstimated = Math.max(estimated.width, estimated.height);
+    if (maxEstimated > 0) {
+      resizeScale = maxOriginal / maxEstimated;
+    }
   }
-  // For targetMiB mode, we can't know the exact scale, so use 1
   
   // Clamp to reasonable range (don't make lens impossibly big)
   resizeScale = Math.max(1, Math.min(resizeScale, 20));
@@ -962,7 +976,7 @@ async function loadDetailPreview(): Promise<void> {
 
     // Get resize and quality settings to show impact on detail preview
     const settings = settingsStore.getSettings();
-    const resizeSettings = settings.resize;
+    let resizeSettings = settings.resize;
     const outputFormat = settings.outputFormat;
     
     // Get quality for the current output format
@@ -973,6 +987,23 @@ async function loadDetailPreview(): Promise<void> {
       quality = settings.quality.webp;
     } else if (outputFormat === 'heic') {
       quality = settings.quality.heic;
+    }
+
+    // For targetMiB mode, convert to pixel-based settings using estimated dimensions
+    if (resizeSettings.mode === 'targetMiB') {
+      const estimated = estimateDimensionsForTarget(
+        dims.width,
+        dims.height,
+        resizeSettings.targetMiB,
+        quality
+      );
+      // Convert to maxSide pixel mode for preview
+      resizeSettings = {
+        mode: 'pixels',
+        keepRatio: true,
+        driving: 'maxSide',
+        maxSide: Math.max(estimated.width, estimated.height),
+      };
     }
 
     // Get detail preview from main process (use appropriate API based on source)
@@ -1209,7 +1240,7 @@ function enterCropQueueMode(items: ImageItem[]): void {
   cropQueueCanceled = false;
   
   // Lock settings for the duration
-  settingsStore.setLocked(true);
+  settingsStore.lock();
   
   // Hide normal action buttons, show queue UI
   if (cropQueueContainer) {
@@ -1288,7 +1319,7 @@ function exitCropQueueMode(): void {
   cropQueueCanceled = false;
   
   // Unlock settings
-  settingsStore.setLocked(false);
+  settingsStore.unlock();
   
   // Restore normal UI
   if (cropQueueContainer) {
@@ -1461,7 +1492,11 @@ function setRunningState(running: boolean): void {
   isRunning = running;
   
   // Lock settings
-  settingsStore.setLocked(running);
+  if (running) {
+    settingsStore.lock();
+  } else {
+    settingsStore.unlock();
+  }
   
   // Update buttons
   convertBtn.disabled = running;
