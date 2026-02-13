@@ -1254,6 +1254,7 @@ body {
   overflow: hidden;
   min-width: 400px;
   max-width: 400px;
+  gap: var(--spacing-sm);
 }
 
 .main-detail.hidden {
@@ -1269,12 +1270,19 @@ body {
   border-radius: 4px;
 }
 
+/* Split view panels - each takes half height */
+.detail-panel-split {
+  flex: 1;
+  min-height: 0; /* Allow flex shrinking */
+}
+
 .detail-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
 }
 
 .detail-title {
@@ -1296,7 +1304,7 @@ body {
   padding: var(--spacing-sm);
   overflow: hidden;
   background-color: var(--color-bg);
-  min-height: 200px;
+  min-height: 100px;
 }
 
 .detail-placeholder {

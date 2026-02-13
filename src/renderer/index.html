@@ -144,11 +144,12 @@
         </div>
       </div>
       
-      <!-- Detail preview panel (100% zoom) -->
+      <!-- Detail preview panel (100% zoom) - split view for quality comparison -->
       <div class="main-detail" id="detail-panel-container">
-        <div id="detail-panel" class="detail-panel">
+        <!-- Top: Original 100% detail -->
+        <div id="detail-panel-original" class="detail-panel detail-panel-split">
           <div class="detail-header">
-            <span class="detail-title">100% Detail</span>
+            <span class="detail-title">Original</span>
             <span id="detail-info" class="detail-info"></span>
           </div>
           <div id="detail-container" class="detail-container">
@@ -156,7 +157,23 @@
               <span class="detail-placeholder-text"></span>
             </div>
             <div id="detail-wrapper" class="detail-wrapper hidden">
-              <img id="detail-image" class="detail-image" alt="Detail preview" />
+              <img id="detail-image" class="detail-image" alt="Original detail" />
+            </div>
+          </div>
+        </div>
+        
+        <!-- Bottom: Simulated output (processed + upscaled) -->
+        <div id="detail-panel-output" class="detail-panel detail-panel-split">
+          <div class="detail-header">
+            <span class="detail-title">Output Preview</span>
+            <span id="detail-output-info" class="detail-info"></span>
+          </div>
+          <div id="detail-output-container" class="detail-container">
+            <div id="detail-output-placeholder" class="detail-placeholder">
+              <span class="detail-placeholder-text"></span>
+            </div>
+            <div id="detail-output-wrapper" class="detail-wrapper hidden">
+              <img id="detail-output-image" class="detail-image" alt="Output preview" />
             </div>
           </div>
         </div>

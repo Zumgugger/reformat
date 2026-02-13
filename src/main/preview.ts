@@ -53,19 +53,17 @@ export async function generatePreview(
     quality = DEFAULT_QUALITY,
   } = options;
 
-  // Load image and get metadata
-  let image = sharp(filePath);
-  const metadata = await image.metadata();
+  // Load image and apply EXIF orientation correction
+  let image = sharp(filePath).rotate();
+  
+  // Get metadata AFTER rotation to get correct dimensions
+  const rotatedMeta = await image.clone().metadata();
+  const baseWidth = rotatedMeta.width ?? 0;
+  const baseHeight = rotatedMeta.height ?? 0;
 
-  const originalWidth = metadata.width ?? 0;
-  const originalHeight = metadata.height ?? 0;
-
-  if (originalWidth === 0 || originalHeight === 0) {
+  if (baseWidth === 0 || baseHeight === 0) {
     throw new Error('Invalid image dimensions');
   }
-
-  // Apply EXIF orientation correction first
-  image = image.rotate();
 
   // Apply transform if provided
   if (transform) {
@@ -74,13 +72,13 @@ export async function generatePreview(
 
   // Calculate preview dimensions (fit within maxSize)
   // After rotation, we need to account for swapped dimensions
-  let effectiveWidth = originalWidth;
-  let effectiveHeight = originalHeight;
+  let effectiveWidth = baseWidth;
+  let effectiveHeight = baseHeight;
   
   // If we have an odd number of 90° rotations, dimensions are swapped
   if (transform && (transform.rotateSteps === 1 || transform.rotateSteps === 3)) {
-    effectiveWidth = originalHeight;
-    effectiveHeight = originalWidth;
+    effectiveWidth = baseHeight;
+    effectiveHeight = baseWidth;
   }
 
   const { width: previewWidth, height: previewHeight } = calculatePreviewDimensions(
@@ -120,8 +118,8 @@ export async function generatePreview(
     dataUrl,
     width: actualWidth,
     height: actualHeight,
-    originalWidth,
-    originalHeight,
+    originalWidth: baseWidth,
+    originalHeight: baseHeight,
   };
 }
 
@@ -323,6 +321,8 @@ export interface DetailPreviewOptions {
   quality?: number;
   /** Resize settings to apply before extracting region */
   resize?: ResizeSettings;
+  /** Upscale the result to match original region dimensions (for quality comparison) */
+  upscaleToOriginal?: boolean;
 }
 
 /** Result of detail preview generation */
@@ -407,21 +407,33 @@ export async function generateDetailPreview(
     format = 'jpeg',
     quality = 90,
     resize,
+    upscaleToOriginal = false,
   } = options;
+
+  // Store original region dimensions for potential upscaling
+  const originalRegionWidth = region.width;
+  const originalRegionHeight = region.height;
 
   // Load image
   let image = sharp(filePath);
   const metadata = await image.metadata();
+  
+  const rawWidth = metadata.width ?? 0;
+  const rawHeight = metadata.height ?? 0;
 
-  const originalWidth = metadata.width ?? 0;
-  const originalHeight = metadata.height ?? 0;
-
-  if (originalWidth === 0 || originalHeight === 0) {
+  if (rawWidth === 0 || rawHeight === 0) {
     throw new Error('Invalid image dimensions');
   }
 
-  // Apply EXIF orientation correction first
+  // Apply EXIF orientation correction
   image = image.rotate();
+  
+  // Calculate dimensions after EXIF auto-rotation
+  // Orientations 5, 6, 7, 8 involve 90° rotations that swap dimensions
+  const exifOrientation = metadata.orientation ?? 1;
+  const exifSwapsDimensions = exifOrientation >= 5 && exifOrientation <= 8;
+  let baseWidth = exifSwapsDimensions ? rawHeight : rawWidth;
+  let baseHeight = exifSwapsDimensions ? rawWidth : rawHeight;
 
   // Apply transform if provided
   if (transform) {
@@ -429,12 +441,12 @@ export async function generateDetailPreview(
   }
 
   // Get effective dimensions after transform
-  let effectiveWidth = originalWidth;
-  let effectiveHeight = originalHeight;
+  let effectiveWidth = baseWidth;
+  let effectiveHeight = baseHeight;
   
   if (transform && (transform.rotateSteps === 1 || transform.rotateSteps === 3)) {
-    effectiveWidth = originalHeight;
-    effectiveHeight = originalWidth;
+    effectiveWidth = baseHeight;
+    effectiveHeight = baseWidth;
   }
 
   // Apply resize if provided (to show how detail looks after resize)
@@ -456,38 +468,59 @@ export async function generateDetailPreview(
       targetWidth = Math.round((targetDims.height / effectiveHeight) * effectiveWidth);
     }
     
+    // Ensure minimum dimensions
+    targetWidth = Math.max(1, targetWidth);
+    targetHeight = Math.max(1, targetHeight);
+    
     // Scale the region coordinates to the resized image
     const scaleX = targetWidth / effectiveWidth;
     const scaleY = targetHeight / effectiveHeight;
     
     regionLeft = Math.round(region.left * scaleX);
     regionTop = Math.round(region.top * scaleY);
-    regionWidth = Math.round(region.width * scaleX);
-    regionHeight = Math.round(region.height * scaleY);
+    regionWidth = Math.max(1, Math.round(region.width * scaleX));
+    regionHeight = Math.max(1, Math.round(region.height * scaleY));
     
-    // Resize the image
-    image = image.resize(targetWidth, targetHeight, {
+    // Resize the image and materialize to buffer first
+    // (Sharp validates extract against pre-resize dimensions if both are chained)
+    const resizedBuffer = await image.resize(targetWidth, targetHeight, {
       withoutEnlargement: false,
-    });
+    }).toBuffer();
+    
+    // Load resized buffer for extraction
+    image = sharp(resizedBuffer);
     
     effectiveWidth = targetWidth;
     effectiveHeight = targetHeight;
   }
 
   // Validate and clamp region to valid bounds
-  const left = Math.max(0, Math.min(effectiveWidth - 1, regionLeft));
-  const top = Math.max(0, Math.min(effectiveHeight - 1, regionTop));
-  const maxWidth = effectiveWidth - left;
-  const maxHeight = effectiveHeight - top;
-  const width = Math.max(1, Math.min(maxWidth, regionWidth));
-  const height = Math.max(1, Math.min(maxHeight, regionHeight));
+  // Ensure left/top are within image, leaving room for at least 1px extraction
+  let left = Math.max(0, Math.min(effectiveWidth - 1, regionLeft));
+  let top = Math.max(0, Math.min(effectiveHeight - 1, regionTop));
+  
+  // Calculate available space and clamp width/height
+  let width = Math.max(1, Math.min(effectiveWidth - left, regionWidth));
+  let height = Math.max(1, Math.min(effectiveHeight - top, regionHeight));
 
   // Extract the region at 1:1 (no scaling)
   image = image.extract({ left, top, width, height });
 
-  // If the extracted region is very small (due to downscaling), upscale it using nearest-neighbor
-  // so the pixelation/compression artifacts are visible
-  if (width < 100 || height < 100) {
+  // Track final dimensions for the result
+  let finalWidth = width;
+  let finalHeight = height;
+
+  // Upscale to match original region dimensions if requested (for quality comparison)
+  // This makes the quality loss visible by showing processed pixels at the same size as original
+  if (upscaleToOriginal && (width !== originalRegionWidth || height !== originalRegionHeight)) {
+    image = image.resize(originalRegionWidth, originalRegionHeight, {
+      kernel: 'nearest', // Nearest-neighbor to show pixelation clearly
+      fit: 'fill',
+    });
+    finalWidth = originalRegionWidth;
+    finalHeight = originalRegionHeight;
+  } else if (width < 100 || height < 100) {
+    // Fallback: upscale very small regions so they're visible
     const scale = Math.max(2, Math.ceil(300 / Math.max(width, height)));
     const newWidth = width * scale;
     const newHeight = height * scale;
@@ -495,6 +528,8 @@ export async function generateDetailPreview(
       kernel: 'nearest',
       fit: 'fill',
     });
+    finalWidth = newWidth;
+    finalHeight = newHeight;
   }
 
   // Encode to buffer
@@ -515,7 +550,7 @@ export async function generateDetailPreview(
 
   return {
     dataUrl,
-    width,
+    width: finalWidth,
     height,
   };
 }
@@ -537,7 +572,12 @@ export async function generateDetailPreviewFromBuffer(
     format = 'jpeg',
     quality = 90,
     resize,
+    upscaleToOriginal = false,
   } = options;
+
+  // Store original region dimensions for potential upscaling
+  const originalRegionWidth = region.width;
+  const originalRegionHeight = region.height;
 
   // Load image
   let image = sharp(buffer);
@@ -583,38 +623,58 @@ export async function generateDetailPreviewFromBuffer(
       targetWidth = Math.round((targetDims.height / effectiveHeight) * effectiveWidth);
     }
     
+    // Ensure minimum dimensions
+    targetWidth = Math.max(1, targetWidth);
+    targetHeight = Math.max(1, targetHeight);
+    
     // Scale the region coordinates to the resized image
     const scaleX = targetWidth / effectiveWidth;
     const scaleY = targetHeight / effectiveHeight;
     
     regionLeft = Math.round(region.left * scaleX);
     regionTop = Math.round(region.top * scaleY);
-    regionWidth = Math.round(region.width * scaleX);
-    regionHeight = Math.round(region.height * scaleY);
+    regionWidth = Math.max(1, Math.round(region.width * scaleX));
+    regionHeight = Math.max(1, Math.round(region.height * scaleY));
     
-    // Resize the image
-    image = image.resize(targetWidth, targetHeight, {
+    // Resize the image and materialize to buffer first
+    // (Sharp validates extract against pre-resize dimensions if both are chained)
+    const resizedBuffer = await image.resize(targetWidth, targetHeight, {
       withoutEnlargement: false,
-    });
+    }).toBuffer();
+    
+    // Load resized buffer for extraction
+    image = sharp(resizedBuffer);
     
     effectiveWidth = targetWidth;
     effectiveHeight = targetHeight;
   }
 
   // Validate and clamp region to valid bounds
-  const left = Math.max(0, Math.min(effectiveWidth - 1, regionLeft));
-  const top = Math.max(0, Math.min(effectiveHeight - 1, regionTop));
-  const maxWidth = effectiveWidth - left;
-  const maxHeight = effectiveHeight - top;
-  const width = Math.max(1, Math.min(maxWidth, regionWidth));
-  const height = Math.max(1, Math.min(maxHeight, regionHeight));
+  // Ensure left/top are within image, leaving room for at least 1px extraction
+  let left = Math.max(0, Math.min(effectiveWidth - 1, regionLeft));
+  let top = Math.max(0, Math.min(effectiveHeight - 1, regionTop));
+  
+  // Calculate available space and clamp width/height
+  let width = Math.max(1, Math.min(effectiveWidth - left, regionWidth));
+  let height = Math.max(1, Math.min(effectiveHeight - top, regionHeight));
 
   // Extract the region at 1:1 (no scaling)
   image = image.extract({ left, top, width, height });
 
-  // If the extracted region is very small (due to downscaling), upscale it using nearest-neighbor
-  // so the pixelation/compression artifacts are visible
-  if (width < 100 || height < 100) {
+  // Track final dimensions for the result
+  let finalWidth = width;
+  let finalHeight = height;
+
+  // Upscale to match original region dimensions if requested (for quality comparison)
+  if (upscaleToOriginal && (width !== originalRegionWidth || height !== originalRegionHeight)) {
+    image = image.resize(originalRegionWidth, originalRegionHeight, {
+      kernel: 'nearest',
+      fit: 'fill',
+    });
+    finalWidth = originalRegionWidth;
+    finalHeight = originalRegionHeight;
+  } else if (width < 100 || height < 100) {
+    // Fallback: upscale very small regions so they're visible
     const scale = Math.max(2, Math.ceil(300 / Math.max(width, height)));
     const newWidth = width * scale;
     const newHeight = height * scale;
@@ -622,7 +682,182 @@ export async function generateDetailPreviewFromBuffer(
       kernel: 'nearest',
       fit: 'fill',
     });
+    finalWidth = newWidth;
+    finalHeight = newHeight;
   }
+
+  // Encode to buffer
+  let outputBuffer: Buffer;
+  let mimeType: string;
+
+  if (format === 'png') {
+    outputBuffer = await image.png().toBuffer();
+    mimeType = 'image/png';
+  } else {
+    outputBuffer = await image.jpeg({ quality }).toBuffer();
+    mimeType = 'image/jpeg';
+  }
+
+  // Create data URL
+  const base64 = outputBuffer.toString('base64');
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+
+  return {
+    dataUrl,
+    width: finalWidth,
+    height: finalHeight,
+  };
+}
+
+/** Options for original detail preview (no resize, just raw pixels) */
+export interface OriginalDetailOptions {
+  /** Region to extract (in pixels, after transform is applied) */
+  region: {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  };
+  /** Transform to apply before extracting region */
+  transform?: Transform;
+  /** Output format: 'jpeg' or 'png' (default: 'png' for lossless) */
+  format?: 'jpeg' | 'png';
+  /** JPEG quality (default: 95 for high quality original view) */
+  quality?: number;
+}
+
+/**
+ * Generate an original 100% detail preview (no resize, just raw pixels).
+ * This shows the original quality without any processing.
+ * 
+ * @param filePath - Path to the source image
+ * @param options - Original detail options
+ * @returns Detail preview result with data URL
+ */
+export async function generateOriginalDetailPreview(
+  filePath: string,
+  options: OriginalDetailOptions
+): Promise<DetailPreviewResult> {
+  const {
+    region,
+    transform,
+    format = 'png',
+    quality = 95,
+  } = options;
+
+  // Load image and apply EXIF orientation correction
+  let image = sharp(filePath).rotate();
+  
+  // Get metadata AFTER rotation to get correct dimensions
+  const rotatedMeta = await image.clone().metadata();
+  const baseWidth = rotatedMeta.width ?? 0;
+  const baseHeight = rotatedMeta.height ?? 0;
+
+  if (baseWidth === 0 || baseHeight === 0) {
+    throw new Error('Invalid image dimensions');
+  }
+
+  // Apply transform if provided
+  if (transform) {
+    image = applyTransform(image, transform);
+  }
+
+  // Get effective dimensions after transform
+  let effectiveWidth = baseWidth;
+  let effectiveHeight = baseHeight;
+  
+  if (transform && (transform.rotateSteps === 1 || transform.rotateSteps === 3)) {
+    effectiveWidth = baseHeight;
+    effectiveHeight = baseWidth;
+  }
+
+  // Validate and clamp region to valid bounds
+  const left = Math.max(0, Math.min(effectiveWidth - 1, region.left));
+  const top = Math.max(0, Math.min(effectiveHeight - 1, region.top));
+  const maxWidth = effectiveWidth - left;
+  const maxHeight = effectiveHeight - top;
+  const width = Math.max(1, Math.min(maxWidth, region.width));
+  const height = Math.max(1, Math.min(maxHeight, region.height));
+
+  // Extract the region at 1:1 (no scaling, no resize)
+  image = image.extract({ left, top, width, height });
+
+  // Encode to buffer (use PNG for lossless original view, or high-quality JPEG)
+  let buffer: Buffer;
+  let mimeType: string;
+
+  if (format === 'png') {
+    buffer = await image.png().toBuffer();
+    mimeType = 'image/png';
+  } else {
+    buffer = await image.jpeg({ quality }).toBuffer();
+    mimeType = 'image/jpeg';
+  }
+
+  // Create data URL
+  const base64 = buffer.toString('base64');
+  const dataUrl = `data:${mimeType};base64,${base64}`;
+
+  return {
+    dataUrl,
+    width,
+    height,
+  };
+}
+
+/**
+ * Generate an original 100% detail preview from a buffer (for clipboard images).
+ * 
+ * @param buffer - Image buffer
+ * @param options - Original detail options
+ * @returns Detail preview result with data URL
+ */
+export async function generateOriginalDetailPreviewFromBuffer(
+  buffer: Buffer,
+  options: OriginalDetailOptions
+): Promise<DetailPreviewResult> {
+  const {
+    region,
+    transform,
+    format = 'png',
+    quality = 95,
+  } = options;
+
+  // Load image
+  let image = sharp(buffer);
+  const metadata = await image.metadata();
+
+  const originalWidth = metadata.width ?? 0;
+  const originalHeight = metadata.height ?? 0;
+
+  if (originalWidth === 0 || originalHeight === 0) {
+    throw new Error('Invalid image dimensions');
+  }
+
+  // Apply transform if provided (no EXIF for clipboard images)
+  if (transform) {
+    image = applyTransform(image, transform);
+  }
+
+  // Get effective dimensions after transform
+  let effectiveWidth = originalWidth;
+  let effectiveHeight = originalHeight;
+  
+  if (transform && (transform.rotateSteps === 1 || transform.rotateSteps === 3)) {
+    effectiveWidth = originalHeight;
+    effectiveHeight = originalWidth;
+  }
+
+  // Validate and clamp region to valid bounds
+  const left = Math.max(0, Math.min(effectiveWidth - 1, region.left));
+  const top = Math.max(0, Math.min(effectiveHeight - 1, region.top));
+  const maxWidth = effectiveWidth - left;
+  const maxHeight = effectiveHeight - top;
+  const width = Math.max(1, Math.min(maxWidth, region.width));
+  const height = Math.max(1, Math.min(maxHeight, region.height));
+
+  // Extract the region at 1:1 (no scaling, no resize)
+  image = image.extract({ left, top, width, height });
 
   // Encode to buffer
   let outputBuffer: Buffer;

@@ -24,10 +24,13 @@ import {
   generateDetailPreview,
   generatePreviewFromBuffer,
   generateDetailPreviewFromBuffer,
+  generateOriginalDetailPreview,
+  generateOriginalDetailPreviewFromBuffer,
   type PreviewResult,
   type PreviewOptions,
   type DetailPreviewOptions,
   type DetailPreviewResult,
+  type OriginalDetailOptions,
 } from './preview';
 import {
   pasteFromClipboard,
@@ -310,6 +313,7 @@ export function registerIpcHandlers(): void {
         resize?: unknown;
         quality?: number;
         format?: 'jpeg' | 'png';
+        upscaleToOriginal?: boolean;
       }
     ): Promise<DetailPreviewResult> => {
       return await generateDetailPreview(sourcePath, {
@@ -318,6 +322,28 @@ export function registerIpcHandlers(): void {
         resize: options.resize as ResizeSettings | undefined,
         format: options.format || 'jpeg',
         quality: options.quality ?? 90,
+        upscaleToOriginal: options.upscaleToOriginal ?? false,
+      });
+    }
+  );
+
+  // Get original detail preview (1:1 region, no resize - raw original pixels)
+  ipcMain.handle(
+    'getOriginalDetailPreview',
+    async (
+      _event,
+      sourcePath: string,
+      options: {
+        region: { left: number; top: number; width: number; height: number };
+        transform?: Transform;
+        format?: 'jpeg' | 'png';
+      }
+    ): Promise<DetailPreviewResult> => {
+      return await generateOriginalDetailPreview(sourcePath, {
+        region: options.region,
+        transform: options.transform,
+        format: options.format || 'png',
+        quality: 95,
       });
     }
   );
@@ -370,6 +396,7 @@ export function registerIpcHandlers(): void {
         resize?: unknown;
         quality?: number;
         format?: 'jpeg' | 'png';
+        upscaleToOriginal?: boolean;
       }
     ): Promise<DetailPreviewResult | null> => {
       const buffer = getClipboardBuffer(itemId);
@@ -383,6 +410,33 @@ export function registerIpcHandlers(): void {
         resize: options.resize as ResizeSettings | undefined,
         format: options.format || 'jpeg',
         quality: options.quality ?? 90,
+        upscaleToOriginal: options.upscaleToOriginal ?? false,
+      });
+    }
+  );
+
+  // Get original detail preview for a clipboard item (no resize - raw pixels)
+  ipcMain.handle(
+    'getClipboardOriginalDetailPreview',
+    async (
+      _event,
+      itemId: string,
+      options: {
+        region: { left: number; top: number; width: number; height: number };
+        transform?: Transform;
+        format?: 'jpeg' | 'png';
+      }
+    ): Promise<DetailPreviewResult | null> => {
+      const buffer = getClipboardBuffer(itemId);
+      if (!buffer) {
+        return null;
+      }
+
+      return await generateOriginalDetailPreviewFromBuffer(buffer, {
+        region: options.region,
+        transform: options.transform,
+        format: options.format || 'png',
+        quality: 95,
       });
     }
   );

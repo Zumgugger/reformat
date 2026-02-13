@@ -157,6 +157,14 @@ export interface DetailPreviewOptions {
   resize?: ResizeSettings;
   quality?: number;
   format?: 'jpeg' | 'png';
+  upscaleToOriginal?: boolean;
+}
+
+/** Original detail preview options (no resize, raw pixels) */
+export interface OriginalDetailOptions {
+  region: { left: number; top: number; width: number; height: number };
+  transform?: Transform;
+  format?: 'jpeg' | 'png';
 }
 
 /** Result of clipboard paste operation */
@@ -203,9 +211,8 @@ export interface DroppedFilePayload {
   data: ArrayBuffer;
 }
 
-/** Persisted settings type for IPC */
+/** Import PersistedSettings for use in ReformatAPI */
 import type { PersistedSettings } from '../shared/settings';
-import type { RunConfig } from '../shared/types';
 
 /** The reformat API exposed to the renderer */
 export interface ReformatAPI {
@@ -234,10 +241,12 @@ export interface ReformatAPI {
   // Preview APIs
   getPreview: (sourcePath: string, options?: PreviewOptions) => Promise<PreviewResult>;
   getDetailPreview: (sourcePath: string, options: DetailPreviewOptions) => Promise<DetailPreviewResult>;
+  getOriginalDetailPreview: (sourcePath: string, options: OriginalDetailOptions) => Promise<DetailPreviewResult>;
   // Clipboard APIs
   pasteFromClipboard: () => Promise<ClipboardPasteResult>;
   getClipboardPreview: (itemId: string, options?: PreviewOptions) => Promise<PreviewResult | null>;
   getClipboardDetailPreview: (itemId: string, options: DetailPreviewOptions) => Promise<DetailPreviewResult | null>;
+  getClipboardOriginalDetailPreview: (itemId: string, options: OriginalDetailOptions) => Promise<DetailPreviewResult | null>;
   removeClipboardBuffer: (itemId: string) => Promise<void>;
   clearClipboardBuffers: () => Promise<void>;
   // Drag-out APIs

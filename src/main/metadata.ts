@@ -39,9 +39,16 @@ export async function extractMetadata(filePath: string): Promise<MetadataResult>
   const image = sharp(filePath);
   const metadata = await image.metadata();
 
-  const width = metadata.width ?? 0;
-  const height = metadata.height ?? 0;
+  let width = metadata.width ?? 0;
+  let height = metadata.height ?? 0;
   const format = metadata.format ?? getExtension(filePath);
+
+  // Account for EXIF orientation
+  // Orientations 5, 6, 7, 8 involve 90° rotations that swap dimensions
+  const exifOrientation = metadata.orientation ?? 1;
+  if (exifOrientation >= 5 && exifOrientation <= 8) {
+    [width, height] = [height, width];
+  }
 
   // Best-effort alpha detection
   // Sharp reports hasAlpha for formats that support it

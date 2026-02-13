@@ -121,6 +121,13 @@ const detailWrapper = document.getElementById('detail-wrapper') as HTMLDivElemen
 const detailImage = document.getElementById('detail-image') as HTMLImageElement;
 const detailInfo = document.getElementById('detail-info') as HTMLSpanElement;
 
+// Output preview panel DOM Elements (split-view bottom panel)
+const detailOutputContainer = document.getElementById('detail-output-container') as HTMLDivElement;
+const detailOutputPlaceholder = document.getElementById('detail-output-placeholder') as HTMLDivElement;
+const detailOutputWrapper = document.getElementById('detail-output-wrapper') as HTMLDivElement;
+const detailOutputImage = document.getElementById('detail-output-image') as HTMLImageElement;
+const detailOutputInfo = document.getElementById('detail-output-info') as HTMLSpanElement;
+
 // Context menu DOM Elements
 const contextMenu = document.getElementById('context-menu') as HTMLDivElement;
 const ctxShowInFolder = document.getElementById('ctx-show-in-folder') as HTMLButtonElement;
@@ -821,6 +828,7 @@ function hideDetailPanel(): void {
 
 /**
  * Initialize lens position for current item.
+ * The lens selects a region sized to match the detail panel for true 1:1 display.
  */
 function initializeLensForItem(): void {
   const item = getSelectedItem();
@@ -846,50 +854,15 @@ function initializeLensForItem(): void {
   const transform = getItemTransform(item.id);
   const dims = getTransformedDimensions(item.width, item.height, transform);
 
-  // Calculate the resize scale factor to make lens larger when downscaling
-  // This shows what area of the original will become the detail panel output
-  const resizeSettings = settingsStore.getSettings().resize;
-  let resizeScale = 1;
-  
-  if (resizeSettings.mode === 'percent') {
-    resizeScale = 100 / resizeSettings.percent;
-  } else if (resizeSettings.mode === 'pixels') {
-    // Calculate scale based on driving dimension
-    if (resizeSettings.driving === 'maxSide' && resizeSettings.maxSide) {
-      const maxOriginal = Math.max(dims.width, dims.height);
-      resizeScale = maxOriginal / resizeSettings.maxSide;
-    } else if (resizeSettings.driving === 'width' && resizeSettings.width) {
-      resizeScale = dims.width / resizeSettings.width;
-    } else if (resizeSettings.driving === 'height' && resizeSettings.height) {
-      resizeScale = dims.height / resizeSettings.height;
-    }
-  } else if (resizeSettings.mode === 'targetMiB') {
-    // Use estimated dimensions for target MiB mode
-    const quality = settingsStore.getEffectiveQuality() || 85;
-    const estimated = estimateDimensionsForTarget(
-      dims.width,
-      dims.height,
-      resizeSettings.targetMiB,
-      quality
-    );
-    // Scale is ratio of original to estimated output
-    const maxOriginal = Math.max(dims.width, dims.height);
-    const maxEstimated = Math.max(estimated.width, estimated.height);
-    if (maxEstimated > 0) {
-      resizeScale = maxOriginal / maxEstimated;
-    }
-  }
-  
-  // Clamp to reasonable range (don't make lens impossibly big)
-  resizeScale = Math.max(1, Math.min(resizeScale, 20));
-
   try {
-    // Calculate lens dimensions based on detail panel size, scaled by resize factor
+    // Calculate lens dimensions based on detail panel size
+    // No scaling - lens selects exactly detailWidth x detailHeight pixels from original
+    // for true 1:1 (100%) display in the detail panel
     const lensDims = calculateLensDimensions(
       dims.width,
       dims.height,
-      detailWidth * resizeScale,
-      detailHeight * resizeScale,
+      detailWidth,
+      detailHeight,
       transform
     );
 
@@ -944,6 +917,7 @@ function updateLensOverlay(): void {
 
 /**
  * Load detail preview for current lens position.
+ * Loads both original (top panel) and output preview (bottom panel) for quality comparison.
  */
 async function loadDetailPreview(): Promise<void> {
   if (!isLensEnabled || !currentLensPosition || isLoadingDetailPreview) return;
@@ -974,7 +948,14 @@ async function loadDetailPreview(): Promise<void> {
       transform
     );
 
-    // Get resize and quality settings to show impact on detail preview
+    const regionOptions = {
+      left: region.left,
+      top: region.top,
+      width: region.width,
+      height: region.height,
+    };
+
+    // Get resize and quality settings for output preview
     const settings = settingsStore.getSettings();
     let resizeSettings = settings.resize;
     const outputFormat = settings.outputFormat;
@@ -1006,38 +987,49 @@ async function loadDetailPreview(): Promise<void> {
       };
     }
 
-    // Get detail preview from main process (use appropriate API based on source)
-    let result;
+    // Load both previews in parallel
+    let originalResult;
+    let outputResult;
+
     if (item.source === 'clipboard') {
-      result = await window.reformat.getClipboardDetailPreview(item.id, {
-        region: {
-          left: region.left,
-          top: region.top,
-          width: region.width,
-          height: region.height,
-        },
-        transform,
-        resize: resizeSettings,
-        quality,
-        format: 'jpeg',
-      });
-      if (!result) {
+      // Clipboard item - use clipboard APIs
+      [originalResult, outputResult] = await Promise.all([
+        window.reformat.getClipboardOriginalDetailPreview(item.id, {
+          region: regionOptions,
+          transform,
+          format: 'png',
+        }),
+        window.reformat.getClipboardDetailPreview(item.id, {
+          region: regionOptions,
+          transform,
+          resize: resizeSettings,
+          quality,
+          format: 'jpeg',
+          upscaleToOriginal: true, // Upscale to match original for quality comparison
+        }),
+      ]);
+
+      if (!originalResult || !outputResult) {
         showDetailPlaceholder('Clipboard image not available');
         return;
       }
     } else {
-      result = await window.reformat.getDetailPreview(item.sourcePath!, {
-        region: {
-          left: region.left,
-          top: region.top,
-          width: region.width,
-          height: region.height,
-        },
-        transform,
-        resize: resizeSettings,
-        quality,
-        format: 'jpeg',
-      });
+      // File item - use file APIs
+      [originalResult, outputResult] = await Promise.all([
+        window.reformat.getOriginalDetailPreview(item.sourcePath!, {
+          region: regionOptions,
+          transform,
+          format: 'png',
+        }),
+        window.reformat.getDetailPreview(item.sourcePath!, {
+          region: regionOptions,
+          transform,
+          resize: resizeSettings,
+          quality,
+          format: 'jpeg',
+          upscaleToOriginal: true, // Upscale to match original for quality comparison
+        }),
+      ]);
     }
 
     // Check if lens is still enabled and item is still selected
@@ -1045,9 +1037,9 @@ async function loadDetailPreview(): Promise<void> {
       return;
     }
 
-    // Display detail preview
+    // Display original detail preview (top panel)
     if (detailImage) {
-      detailImage.src = result.dataUrl;
+      detailImage.src = originalResult.dataUrl;
     }
     if (detailWrapper) {
       detailWrapper.classList.remove('hidden');
@@ -1056,7 +1048,21 @@ async function loadDetailPreview(): Promise<void> {
       detailPlaceholder.classList.add('hidden');
     }
     if (detailInfo) {
-      detailInfo.textContent = `${result.width} × ${result.height}px`;
+      detailInfo.textContent = `${originalResult.width} × ${originalResult.height}px`;
+    }
+
+    // Display output detail preview (bottom panel)
+    if (detailOutputImage) {
+      detailOutputImage.src = outputResult.dataUrl;
+    }
+    if (detailOutputWrapper) {
+      detailOutputWrapper.classList.remove('hidden');
+    }
+    if (detailOutputPlaceholder) {
+      detailOutputPlaceholder.classList.add('hidden');
+    }
+    if (detailOutputInfo) {
+      detailOutputInfo.textContent = `${outputResult.width} × ${outputResult.height}px`;
     }
   } catch (error) {
     console.error('Failed to load detail preview:', error);
@@ -1067,7 +1073,27 @@ async function loadDetailPreview(): Promise<void> {
 }
 
 /**
+ * Show output detail placeholder.
+ */
+function showOutputDetailPlaceholder(message = ''): void {
+  if (detailOutputWrapper) {
+    detailOutputWrapper.classList.add('hidden');
+  }
+  if (detailOutputPlaceholder) {
+    detailOutputPlaceholder.classList.remove('hidden');
+    const textEl = detailOutputPlaceholder.querySelector('.detail-placeholder-text');
+    if (textEl) {
+      textEl.textContent = message;
+    }
+  }
+  if (detailOutputInfo) {
+    detailOutputInfo.textContent = '';
+  }
+}
+
+/**
  * Show detail placeholder.
+ * Also shows the output placeholder with the same message.
  */
 function showDetailPlaceholder(message = ''): void {
   if (detailWrapper) {
@@ -1083,6 +1109,8 @@ function showDetailPlaceholder(message = ''): void {
   if (detailInfo) {
     detailInfo.textContent = '';
   }
+  // Also show output placeholder
+  showOutputDetailPlaceholder(message);
 }
 
 /**

@@ -131,6 +131,14 @@ export interface DetailPreviewOptions {
   resize?: unknown;
   quality?: number;
   format?: 'jpeg' | 'png';
+  upscaleToOriginal?: boolean;
+}
+
+/** Original detail preview options (no resize, raw pixels) */
+export interface OriginalDetailOptions {
+  region: { left: number; top: number; width: number; height: number };
+  transform?: Transform;
+  format?: 'jpeg' | 'png';
 }
 
 /** Result of clipboard paste operation */
@@ -280,6 +288,11 @@ contextBridge.exposeInMainWorld('reformat', {
     return await ipcRenderer.invoke('getDetailPreview', sourcePath, options);
   },
 
+  // Get original detail preview (1:1 region, no resize - raw original pixels)
+  getOriginalDetailPreview: async (sourcePath: string, options: OriginalDetailOptions): Promise<DetailPreviewResult> => {
+    return await ipcRenderer.invoke('getOriginalDetailPreview', sourcePath, options);
+  },
+
   // Subscribe to run progress events
   onRunProgress: (callback: (progress: ExportProgress) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, progress: ExportProgress) => {
@@ -307,6 +320,11 @@ contextBridge.exposeInMainWorld('reformat', {
   // Get detail preview for a clipboard item
   getClipboardDetailPreview: async (itemId: string, options: DetailPreviewOptions): Promise<DetailPreviewResult | null> => {
     return await ipcRenderer.invoke('getClipboardDetailPreview', itemId, options);
+  },
+
+  // Get original detail preview for a clipboard item (no resize - raw pixels)
+  getClipboardOriginalDetailPreview: async (itemId: string, options: OriginalDetailOptions): Promise<DetailPreviewResult | null> => {
+    return await ipcRenderer.invoke('getClipboardOriginalDetailPreview', itemId, options);
   },
 
   // Remove a clipboard buffer
