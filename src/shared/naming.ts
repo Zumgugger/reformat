@@ -182,7 +182,14 @@ export async function resolveOutputPath(
   const uniqueFilename = await resolveUniqueFilename(folder, outputFilename, exists);
 
   const normalizedFolder = folder.replace(/[\\/]+$/, '');
-  return `${normalizedFolder}/${uniqueFilename}`;
+  let outputPath = `${normalizedFolder}/${uniqueFilename}`;
+  
+  // Normalize path separators for Windows
+  if (platform === 'win32') {
+    outputPath = outputPath.replace(/\//g, '\\');
+  }
+  
+  return outputPath;
 }
 
 /**

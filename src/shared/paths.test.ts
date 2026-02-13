@@ -1,10 +1,11 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   getParentFolderName,
   getParentFolderPath,
   resolveOutputSubfolder,
   buildOutputFolderPath,
-  MIXED_SOURCE_FOLDER,
+  REFORMAT_SUFFIX,
+  generateReformatFolderName,
 } from './paths';
 import { ImageItem } from './types';
 
@@ -95,27 +96,27 @@ describe('paths.ts', () => {
 
   describe('resolveOutputSubfolder', () => {
     describe('single file', () => {
-      it('should return empty string (Downloads root) for single file', () => {
+      it('should return folder name with _reformat suffix for single file', () => {
         const items = [createFileItem('/Users/john/Pictures/photo.jpg')];
-        expect(resolveOutputSubfolder(items)).toBe('');
+        expect(resolveOutputSubfolder(items)).toBe('Pictures_reformat');
       });
 
-      it('should return empty string for single Windows path', () => {
+      it('should return folder name with _reformat for single Windows path', () => {
         const items = [
           createFileItem('C:\\Users\\john\\Pictures\\photo.jpg'),
         ];
-        expect(resolveOutputSubfolder(items)).toBe('');
+        expect(resolveOutputSubfolder(items)).toBe('Pictures_reformat');
       });
     });
 
     describe('batch from one folder', () => {
-      it('should return source folder name for batch from same folder', () => {
+      it('should return source folder name with _reformat suffix for batch from same folder', () => {
         const items = [
           createFileItem('/Users/john/Vacation/IMG_001.jpg'),
           createFileItem('/Users/john/Vacation/IMG_002.jpg'),
           createFileItem('/Users/john/Vacation/IMG_003.png'),
         ];
-        expect(resolveOutputSubfolder(items)).toBe('Vacation');
+        expect(resolveOutputSubfolder(items)).toBe('Vacation_reformat');
       });
 
       it('should handle Windows paths', () => {
@@ -123,7 +124,7 @@ describe('paths.ts', () => {
           createFileItem('C:\\Photos\\Summer\\img1.jpg'),
           createFileItem('C:\\Photos\\Summer\\img2.jpg'),
         ];
-        expect(resolveOutputSubfolder(items)).toBe('Summer');
+        expect(resolveOutputSubfolder(items)).toBe('Summer_reformat');
       });
 
       it('should be case-insensitive for folder comparison (Windows)', () => {
@@ -131,49 +132,52 @@ describe('paths.ts', () => {
           createFileItem('C:\\Photos\\SUMMER\\img1.jpg'),
           createFileItem('C:\\Photos\\summer\\img2.jpg'),
         ];
-        expect(resolveOutputSubfolder(items)).toBe('SUMMER'); // First match
+        expect(resolveOutputSubfolder(items)).toBe('SUMMER_reformat'); // First match
       });
     });
 
     describe('mixed source folders', () => {
-      it('should return Reformat for items from different folders', () => {
+      it('should return date-based folder for items from different folders', () => {
         const items = [
           createFileItem('/Users/john/Vacation/IMG_001.jpg'),
           createFileItem('/Users/john/Work/doc.png'),
         ];
-        expect(resolveOutputSubfolder(items)).toBe(MIXED_SOURCE_FOLDER);
+        const result = resolveOutputSubfolder(items);
+        expect(result).toMatch(/^Reformat_\d{4}-\d{2}-\d{2}$/);
       });
 
-      it('should return Reformat for Windows paths from different folders', () => {
+      it('should return date-based folder for Windows paths from different folders', () => {
         const items = [
           createFileItem('C:\\Photos\\Summer\\img1.jpg'),
           createFileItem('C:\\Photos\\Winter\\img2.jpg'),
         ];
-        expect(resolveOutputSubfolder(items)).toBe(MIXED_SOURCE_FOLDER);
+        const result = resolveOutputSubfolder(items);
+        expect(result).toMatch(/^Reformat_\d{4}-\d{2}-\d{2}$/);
       });
     });
 
     describe('clipboard items', () => {
-      it('should return Reformat for clipboard-only items', () => {
+      it('should return date-based folder for clipboard-only items', () => {
         const items = [createClipboardItem('clip1'), createClipboardItem('clip2')];
-        expect(resolveOutputSubfolder(items)).toBe(MIXED_SOURCE_FOLDER);
+        const result = resolveOutputSubfolder(items);
+        expect(result).toMatch(/^Reformat_\d{4}-\d{2}-\d{2}$/);
       });
 
-      it('should ignore clipboard items when determining folder (single file)', () => {
+      it('should use folder name with _reformat when single file with clipboard', () => {
         const items = [
           createClipboardItem('clip1'),
           createFileItem('/Users/john/Pictures/photo.jpg'),
         ];
-        expect(resolveOutputSubfolder(items)).toBe('');
+        expect(resolveOutputSubfolder(items)).toBe('Pictures_reformat');
       });
 
-      it('should ignore clipboard items when batch from same folder', () => {
+      it('should use folder name with _reformat when batch from same folder with clipboard', () => {
         const items = [
           createClipboardItem('clip1'),
           createFileItem('/Users/john/Vacation/IMG_001.jpg'),
           createFileItem('/Users/john/Vacation/IMG_002.jpg'),
         ];
-        expect(resolveOutputSubfolder(items)).toBe('Vacation');
+        expect(resolveOutputSubfolder(items)).toBe('Vacation_reformat');
       });
     });
 
@@ -200,8 +204,22 @@ describe('paths.ts', () => {
     });
 
     describe('empty input', () => {
-      it('should return Reformat for empty array', () => {
-        expect(resolveOutputSubfolder([])).toBe(MIXED_SOURCE_FOLDER);
+      it('should return date-based folder for empty array', () => {
+        const result = resolveOutputSubfolder([]);
+        expect(result).toMatch(/^Reformat_\d{4}-\d{2}-\d{2}$/);
+      });
+    });
+
+    describe('generateReformatFolderName', () => {
+      it('should generate folder name in correct format', () => {
+        const result = generateReformatFolderName();
+        expect(result).toMatch(/^Reformat_\d{4}-\d{2}-\d{2}$/);
+      });
+
+      it('should use current date', () => {
+        const now = new Date();
+        const expected = `Reformat_${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        expect(generateReformatFolderName()).toBe(expected);
       });
     });
   });
@@ -215,32 +233,32 @@ describe('paths.ts', () => {
 
     it('should append subfolder to downloads path', () => {
       expect(
-        buildOutputFolderPath('/Users/john/Downloads', 'Vacation')
-      ).toBe('/Users/john/Downloads/Vacation');
+        buildOutputFolderPath('/Users/john/Downloads', 'Vacation_reformat')
+      ).toBe('/Users/john/Downloads\\Vacation_reformat');
     });
 
     it('should handle Windows downloads path', () => {
       expect(
-        buildOutputFolderPath('C:\\Users\\john\\Downloads', 'Vacation')
-      ).toBe('C:\\Users\\john\\Downloads/Vacation');
+        buildOutputFolderPath('C:\\Users\\john\\Downloads', 'Vacation_reformat')
+      ).toBe('C:\\Users\\john\\Downloads\\Vacation_reformat');
     });
 
     it('should handle trailing slash in downloads path', () => {
-      expect(buildOutputFolderPath('/Users/john/Downloads/', 'Test')).toBe(
-        '/Users/john/Downloads/Test'
+      expect(buildOutputFolderPath('/Users/john/Downloads/', 'Test_reformat')).toBe(
+        '/Users/john/Downloads\\Test_reformat'
       );
     });
 
     it('should handle trailing backslash in Windows path', () => {
       expect(
-        buildOutputFolderPath('C:\\Users\\john\\Downloads\\', 'Test')
-      ).toBe('C:\\Users\\john\\Downloads/Test');
+        buildOutputFolderPath('C:\\Users\\john\\Downloads\\', 'Test_reformat')
+      ).toBe('C:\\Users\\john\\Downloads\\Test_reformat');
     });
 
-    it('should handle Reformat subfolder', () => {
+    it('should handle date-based subfolder', () => {
       expect(
-        buildOutputFolderPath('/Users/john/Downloads', MIXED_SOURCE_FOLDER)
-      ).toBe('/Users/john/Downloads/Reformat');
+        buildOutputFolderPath('/Users/john/Downloads', 'Reformat_2026-02-13')
+      ).toBe('/Users/john/Downloads\\Reformat_2026-02-13');
     });
   });
 });

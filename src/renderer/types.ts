@@ -3,6 +3,26 @@
  * These match the types exposed via preload.ts contextBridge.
  */
 
+// Import types for local use
+import type {
+  OutputFormat,
+  ResizeMode,
+  ResizeSettings,
+  ResizeSettingsPixels,
+  ResizeSettingsPercent,
+  ResizeSettingsTargetMiB,
+  QualitySettings,
+  DrivingDimension,
+  Transform,
+  Crop,
+  CropRect,
+  CropRatioPreset,
+  ItemRunConfig,
+  RunConfig,
+  ItemStatus,
+  ItemResult,
+} from '../shared/types';
+
 // Re-export shared types for convenience
 export type {
   OutputFormat,
@@ -21,7 +41,7 @@ export type {
   RunConfig,
   ItemStatus,
   ItemResult,
-} from '../shared/types';
+};
 
 export { DEFAULT_TRANSFORM, DEFAULT_CROP } from '../shared/types';
 

@@ -446,21 +446,14 @@ export async function generateDetailPreview(
   if (resize) {
     // Calculate target dimensions
     const targetDims = calculateTargetDimensions(effectiveWidth, effectiveHeight, resize);
-    let targetWidth = targetDims.width;
-    let targetHeight = targetDims.height;
+    let targetWidth: number = targetDims.width ?? effectiveWidth;
+    let targetHeight: number = targetDims.height ?? effectiveHeight;
     
     // If one dimension is undefined, calculate it preserving aspect ratio
-    if (targetWidth !== undefined && targetHeight === undefined) {
-      targetHeight = Math.round((targetWidth / effectiveWidth) * effectiveHeight);
-    } else if (targetHeight !== undefined && targetWidth === undefined) {
-      targetWidth = Math.round((targetHeight / effectiveHeight) * effectiveWidth);
-    }
-    
-    // Both dimensions should now be defined
-    if (targetWidth === undefined || targetHeight === undefined) {
-      // Fallback if both were undefined (shouldn't happen)
-      targetWidth = effectiveWidth;
-      targetHeight = effectiveHeight;
+    if (targetDims.width !== undefined && targetDims.height === undefined) {
+      targetHeight = Math.round((targetDims.width / effectiveWidth) * effectiveHeight);
+    } else if (targetDims.height !== undefined && targetDims.width === undefined) {
+      targetWidth = Math.round((targetDims.height / effectiveHeight) * effectiveWidth);
     }
     
     // Scale the region coordinates to the resized image
@@ -580,21 +573,14 @@ export async function generateDetailPreviewFromBuffer(
   if (resize) {
     // Calculate target dimensions
     const targetDims = calculateTargetDimensions(effectiveWidth, effectiveHeight, resize);
-    let targetWidth = targetDims.width;
-    let targetHeight = targetDims.height;
+    let targetWidth: number = targetDims.width ?? effectiveWidth;
+    let targetHeight: number = targetDims.height ?? effectiveHeight;
     
     // If one dimension is undefined, calculate it preserving aspect ratio
-    if (targetWidth !== undefined && targetHeight === undefined) {
-      targetHeight = Math.round((targetWidth / effectiveWidth) * effectiveHeight);
-    } else if (targetHeight !== undefined && targetWidth === undefined) {
-      targetWidth = Math.round((targetHeight / effectiveHeight) * effectiveWidth);
-    }
-    
-    // Both dimensions should now be defined
-    if (targetWidth === undefined || targetHeight === undefined) {
-      // Fallback if both were undefined (shouldn't happen)
-      targetWidth = effectiveWidth;
-      targetHeight = effectiveHeight;
+    if (targetDims.width !== undefined && targetDims.height === undefined) {
+      targetHeight = Math.round((targetDims.width / effectiveWidth) * effectiveHeight);
+    } else if (targetDims.height !== undefined && targetDims.width === undefined) {
+      targetWidth = Math.round((targetDims.height / effectiveHeight) * effectiveWidth);
     }
     
     // Scale the region coordinates to the resized image

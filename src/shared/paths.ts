@@ -2,16 +2,29 @@
  * Output folder resolution rules (pure functions).
  *
  * Rules:
- * - Single file → Downloads root
- * - Batch from one source folder → Downloads/<source-folder-name>/
- * - Mixed source folders → Downloads/Reformat/
+ * - Single file from a folder → Downloads/{source-folder-name}_reformat/
+ * - Batch from one source folder → Downloads/{source-folder-name}_reformat/
+ * - Mixed source folders → Downloads/Reformat_{date}/
+ * - Clipboard images → Downloads/Reformat_{date}/
  * - Clipboard during a run → same destination as that run
  */
 
 import { ImageItem } from './types';
 
-/** Default subfolder name for mixed sources */
-export const MIXED_SOURCE_FOLDER = 'Reformat';
+/** Suffix appended to folder names */
+export const REFORMAT_SUFFIX = '_reformat';
+
+/**
+ * Generate a date-based folder name for mixed/clipboard sources.
+ * Format: Reformat_YYYY-MM-DD
+ */
+export function generateReformatFolderName(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `Reformat_${year}-${month}-${day}`;
+}
 
 /**
  * Extract the parent folder name from a file path.
@@ -71,17 +84,12 @@ export function resolveOutputSubfolder(
     (item) => item.source === 'file' && item.sourcePath
   );
 
-  // No file items (all clipboard) → use Reformat folder
+  // No file items (all clipboard) → use Reformat_{date} folder
   if (fileItems.length === 0) {
-    return MIXED_SOURCE_FOLDER;
+    return generateReformatFolderName();
   }
 
-  // Single file → Downloads root
-  if (fileItems.length === 1) {
-    return '';
-  }
-
-  // Multiple files → check if all from same source folder
+  // Check if all files are from the same source folder
   const parentPaths = new Set<string>();
   for (const item of fileItems) {
     const parentPath = getParentFolderPath(item.sourcePath!);
@@ -91,15 +99,19 @@ export function resolveOutputSubfolder(
     }
   }
 
-  // All from same folder → use that folder's name
+  // All from same folder (single or multiple) → use {folderName}_reformat
   if (parentPaths.size === 1) {
     const firstItem = fileItems[0];
     const folderName = getParentFolderName(firstItem.sourcePath!);
-    return folderName || MIXED_SOURCE_FOLDER;
+    if (folderName) {
+      return `${folderName}${REFORMAT_SUFFIX}`;
+    }
+    // No folder name found, use date-based folder
+    return generateReformatFolderName();
   }
 
-  // Mixed source folders → use Reformat
-  return MIXED_SOURCE_FOLDER;
+  // Mixed source folders → use Reformat_{date}
+  return generateReformatFolderName();
 }
 
 /**
@@ -119,6 +131,6 @@ export function buildOutputFolderPath(
     return normalizedDownloads;
   }
 
-  // Use forward slash for consistency (will work on both platforms)
-  return `${normalizedDownloads}/${subfolder}`;
+  // Use backslash for Windows compatibility
+  return `${normalizedDownloads}\\${subfolder}`;
 }
