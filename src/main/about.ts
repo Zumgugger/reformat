@@ -59,7 +59,7 @@ export function showAboutDialog(parentWindow?: BrowserWindow | null): void {
     type: 'info',
     title: `About ${info.name}`,
     message: info.name,
-    detail: `Version: ${info.version}\nBuild Date: ${info.buildDate}\n\nOffline image resizing and reformatting tool.`,
+    detail: `Version: ${info.version}\nBuild Date: ${info.buildDate}\n\nOffline image resizing and reformatting tool.\n\nCustom Software by:\nzumgugger software solutions!`,
     buttons: ['OK'],
     noLink: true,
   });

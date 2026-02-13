@@ -16,10 +16,22 @@ if (isWsl()) {
   app.disableHardwareAcceleration();
 }
 
+function getIconPath(): string {
+  if (app.isPackaged) {
+    // In packaged app, icon is in resources
+    return path.join(process.resourcesPath, 'build', 'icon.png');
+  }
+  // In development
+  return path.join(__dirname, '../../build/icon.png');
+}
+
 function createWindow(): void {
+  const iconPath = getIconPath();
+  
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

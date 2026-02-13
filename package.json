@@ -38,6 +38,7 @@
     "cross-env": "^10.1.0",
     "electron": "^40.2.1",
     "electron-builder": "^26.7.0",
+    "png-to-ico": "^3.0.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vitest": "^4.0.18",
@@ -62,7 +63,16 @@
       {
         "from": "node_modules/sharp",
         "to": "node_modules/sharp",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "build",
+        "to": "build",
+        "filter": [
+          "icon.png"
+        ]
       }
     ],
     "asar": true,
@@ -73,10 +83,12 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "signAndEditExecutable": false
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
@@ -86,7 +98,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.graphics-design"
@@ -106,7 +121,9 @@
       ]
     },
     "linux": {
-      "target": ["AppImage"],
+      "target": [
+        "AppImage"
+      ],
       "category": "Graphics"
     }
   }
